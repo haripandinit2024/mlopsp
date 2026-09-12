@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DROPpredict - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/js/theme.js"></script>
+    <script src="/js/i18n.js"></script>
+    <style>
+        .user-info {
+            padding: 0 0 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 0.75rem;
+        }
+        .user-info .user-name {
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .user-info .user-role {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            text-transform: capitalize;
+            margin-top: 0.125rem;
+        }
+        .logout-btn {
+            width: 100%;
+            margin-top: 0.75rem;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .logout-btn:hover {
+            background: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">&#x1F393;</span>
+                    <h1>DROPpredict</h1>
+                </div>
+                <div class="subtitle">Student Risk Analytics Platform</div>
+            </div>
+
+            <ul class="nav-menu" id="navMenu"></ul>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-name" id="userName">-</div>
+                    <div class="user-role" id="userRole">-</div>
+                </div>
+                <div class="model-status" id="modelStatus">
+                    <span class="status-dot"></span><span>Model Active</span>
+                </div>
+                <button class="btn logout-btn" id="logoutBtn">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="main-header">
+                <h2 id="viewTitle">Dashboard</h2>
+                <p id="viewSubtitle"></p>
+            </div>
+
+            <!-- Student View -->
+            <section class="view" id="studentView">
+                <div class="card-grid">
+                    <div class="card">
+                        <h3 data-i18n="stu.quick">Quick Student Lookup</h3>
+                        <p data-i18n="stu.quickSub">Enter a student ID (1-10000) to check their risk score.</p>
+                        <div class="input-group">
+                            <input type="number" id="studentIdInput" placeholder="Student ID" data-i18n-ph="stu.idPh" min="1" max="10000">
+                            <button class="btn btn-primary" onclick="lookupStudent()" data-i18n="stu.lookup">Look Up</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3 data-i18n="stu.manual">Manual Risk Prediction</h3>
+                        <p data-i18n="stu.manualSub">Enter the student profile below for a live prediction.</p>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputGPA" data-i18n="stu.gpa">GPA</label>
+                                <input type="number" id="inputGPA" step="0.01" min="0" max="4" placeholder="e.g. 2.5">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputAttendance" data-i18n="stu.attendance">Attendance Rate (%)</label>
+                                <input type="number" id="inputAttendance" min="0" max="100" placeholder="e.g. 82">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputStress" data-i18n="stu.stress">Stress Index (1-10)</label>
+                                <input type="number" id="inputStress" min="1" max="10" placeholder="e.g. 6">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputStudyHours" data-i18n="stu.study">Study Hours / Day</label>
+                                <input type="number" id="inputStudyHours" step="0.5" placeholder="e.g. 4">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputSemesterGPA" data-i18n="stu.semGpa">Semester GPA</label>
+                                <input type="number" id="inputSemesterGPA" step="0.01" min="0" max="4" placeholder="e.g. 2.3">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputDelay" data-i18n="stu.delay">Assignment Delay (days)</label>
+                                <input type="number" id="inputDelay" min="0" placeholder="e.g. 2">
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <button class="btn btn-primary" onclick="predictCustom()" data-i18n="stu.predict">Predict Risk</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result -->
+                <div class="card result-card hidden" id="studentResult">
+                    <div class="result-header">
+                        <h3 data-i18n="stu.result">Prediction Result</h3>
+                        <button class="btn btn-close" onclick="hideResult('studentResult')">&times;</button>
+                    </div>
+                    <div class="risk-gauge" data-tier="Low">
+                        <div class="gauge-value" id="studentRiskValue">--</div>
+                        <div class="gauge-label" id="studentRiskTier">--</div>
+                    </div>
+                    <div class="risk-bar-container">
+                        <div class="risk-bar low" id="studentRiskBar" style="width:0%"></div>
+                    </div>
+                    <div class="risk-details" id="studentDetails"></div>
+                    <div class="recommendations">
+                        <h4 data-i18n="stu.recs">Recommendations</h4>
+                        <ul id="studentRecList"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Faculty View -->
+            <section class="view" id="facultyView">
+                <div class="card">
+                    <h3 data-i18n="fac.title">Department Watchlist</h3>
+                    <p data-i18n="fac.sub">Monitor at-risk students in a department.</p>
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label for="facultyDept" data-i18n="fac.department">Department</label>
+                            <select id="facultyDept" onchange="loadFacultyStudents()">
+                                <option value="CS">Computer Science</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Business">Business</option>
+                                <option value="Arts">Arts</option>
+                                <option value="Science">Science</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="facultyYear" data-i18n="fac.year">Year</label>
+                            <select id="facultyYear" onchange="loadFacultyStudents()">
+                                <option value="All" data-i18n="fac.allYears">All years</option>
+                                <option value="Year 1">Year 1</option>
+                                <option value="Year 2">Year 2</option>
+                                <option value="Year 3">Year 3</option>
+                                <option value="Year 4">Year 4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-card danger"><div class="stat-value" id="facultyHigh">0</div><div class="stat-label" data-i18n="stat.high">High Risk</div></div>
+                        <div class="stat-card warning"><div class="stat-value" id="facultyMedium">0</div><div class="stat-label" data-i18n="stat.medium">Medium Risk</div></div>
+                        <div class="stat-card success"><div class="stat-value" id="facultyLow">0</div><div class="stat-label" data-i18n="stat.low">Low Risk</div></div>
+                        <div class="stat-card highlight"><div class="stat-value" id="facultyTotal">0</div><div class="stat-label" data-i18n="stat.total">Total At-Risk</div></div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th.id">Student ID</th><th data-i18n="th.year">Year</th><th data-i18n="th.attendance">Attendance</th>
+                                    <th data-i18n="th.gpa">GPA</th><th data-i18n="th.stress">Stress</th><th data-i18n="th.risk">Risk</th><th data-i18n="th.tier">Tier</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facultyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin View -->
+            <section class="view" id="adminView">
+                <div class="stats-row">
+                    <div class="stat-card highlight"><div class="stat-value" id="adminTotal">-</div><div class="stat-label" data-i18n="adm.total">Total Students</div></div>
+                    <div class="stat-card danger"><div class="stat-value" id="adminDropoutRate">-</div><div class="stat-label" data-i18n="adm.dropout">Dropout Rate</div></div>
+                    <div class="stat-card danger"><div class="stat-value" id="adminHighRisk">-</div><div class="stat-label" data-i18n="stat.high">High Risk</div></div>
+                    <div class="stat-card warning"><div class="stat-value" id="adminMediumRisk">-</div><div class="stat-label" data-i18n="stat.medium">Medium Risk</div></div>
+                </div>
+                <div class="card-grid">
+                    <div class="card">
+                        <h3 data-i18n="adm.deptChart">Average Risk by Department</h3>
+                        <div id="deptChart"></div>
+                    </div>
+                    <div class="card">
+                        <h3 data-i18n="adm.yearChart">Average Risk by Year</h3>
+                        <div id="yearChart"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Interventions View -->
+            <section class="view" id="interventionsView">
+                <div class="card-grid">
+                    <div class="card">
+                        <h3 data-i18n="int.create">Create Intervention</h3>
+                        <p data-i18n="int.createSub">Assign a support action to an at-risk student.</p>
+                        <form id="intForm" onsubmit="return createIntervention(event)">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="intStudentId" data-i18n="th.id">Student ID</label>
+                                    <input type="number" id="intStudentId" min="1" max="10000" placeholder="e.g. 1287" data-i18n-ph="int.idPh" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="intStudentName" data-i18n="th.student">Student Name</label>
+                                    <input type="text" id="intStudentName" placeholder="e.g. Priya Sharma" data-i18n-ph="int.namePh">
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="intType" data-i18n="th.type">Intervention Type</label>
+                                    <select id="intType" required>
+                                        <option value="" data-i18n="int.typePh">Select type</option>
+                                        <option value="Counseling">Counseling</option>
+                                        <option value="Tutoring">Tutoring</option>
+                                        <option value="Attendance Support">Attendance Support</option>
+                                        <option value="Financial Aid Check">Financial Aid Check</option>
+                                        <option value="Mentorship">Mentorship</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="intStatus" data-i18n="int.initial">Initial Status</label>
+                                    <input type="text" value="Open" disabled>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label for="intDescription" data-i18n="int.desc">Description / Notes</label>
+                                <textarea id="intDescription" rows="3" placeholder="Describe the support plan..." data-i18n-ph="int.descPh"></textarea>
+                            </div>
+                            <div class="input-group">
+                                <button type="submit" class="btn btn-primary" data-i18n="int.createBtn">Create Intervention</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <h3 data-i18n="int.filter">Filter Interventions</h3>
+                        <p data-i18n="int.filterSub">Search the intervention register.</p>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="intFilterStatus" data-i18n="th.status">Status</label>
+                                <select id="intFilterStatus" onchange="loadInterventions()">
+                                    <option value="" data-i18n="int.allStatus">All statuses</option>
+                                    <option value="Open" data-i18n="int.open">Open</option>
+                                    <option value="In Progress" data-i18n="int.inProgress">In Progress</option>
+                                    <option value="Resolved" data-i18n="int.resolved">Resolved</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="intSearch" data-i18n="int.search">Search</label>
+                                <input type="text" id="intSearch" placeholder="Name / notes / type" data-i18n-ph="int.searchPh">
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <button class="btn btn-primary" onclick="loadInterventions()" data-i18n="int.apply">Apply</button>
+                        </div>
+                        <div class="stats-row" style="margin-top: 1.5rem; margin-bottom: 0;">
+                            <div class="stat-card highlight"><div class="stat-value" id="intTotal">0</div><div class="stat-label" data-i18n="int.all">All</div></div>
+                            <div class="stat-card danger"><div class="stat-value" id="intOpen">0</div><div class="stat-label" data-i18n="int.open">Open</div></div>
+                            <div class="stat-card warning"><div class="stat-value" id="intInProgress">0</div><div class="stat-label" data-i18n="int.inProgress">In Progress</div></div>
+                            <div class="stat-card success"><div class="stat-value" id="intResolved">0</div><div class="stat-label" data-i18n="int.resolved">Resolved</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 data-i18n="int.register">Intervention Register</h3>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th.id">ID</th><th data-i18n="th.student">Student</th><th data-i18n="th.type">Type</th><th data-i18n="th.status">Status</th>
+                                    <th data-i18n="th.notes">Notes</th><th data-i18n="th.assigned">Assigned By</th><th data-i18n="th.created">Created</th><th data-i18n="th.actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="interventionsBody">
+                                <tr class="loading"><td colspan="8" data-i18n="int.loading">Loading interventions...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section class="view" id="settingsView">
+                <div class="card settings-view-card">
+                    <h3 data-i18n="view.settings">Settings</h3>
+                    <p class="settings-desc" data-i18n="set.allPages">Theme and language apply to all pages.</p>
+
+                    <div class="set-section">
+                        <div class="set-title" data-i18n="set.theme">Theme</div>
+                        <div class="set-theme-menu" id="settingsThemeMenu">
+                            <button type="button" data-theme-opt="light" data-i18n="set.light">Light</button>
+                            <button type="button" data-theme-opt="dark" data-i18n="set.dark">Dark</button>
+                            <button type="button" data-theme-opt="system" data-i18n="set.system">System</button>
+                        </div>
+                    </div>
+
+                    <div class="set-section">
+                        <div class="set-title" data-i18n="set.language">Language</div>
+                        <div class="set-lang-grid" id="settingsLangGrid"></div>
+                    </div>
+
+                    <p class="settings-desc" data-i18n="set.saved">Saved automatically on this device</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/interventions.js"></script>
+    <script src="/js/controls.js"></script>
+
+    <!-- Firebase Authentication + Cloud Firestore (no Firebase Storage). -->
+    <script src="/js/firebase-config.js"></script>
+    <script type="module" src="/js/firebase.js"></script>
+    <script type="module" src="/js/firebase-auth.js"></script>
+</body>
+</html>

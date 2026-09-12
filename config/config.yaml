@@ -1,0 +1,54 @@
+dataset:
+  raw_path: dataset/raw/student_dropout_dataset_v3.csv
+  processed_dir: dataset/processed
+
+target_column: Dropout
+
+drop_columns:
+  - Student_ID
+
+numerical_features:
+  - Age
+  - Family_Income
+  - Study_Hours_per_Day
+  - Attendance_Rate
+  - Assignment_Delay_Days
+  - Travel_Time_Minutes
+  - Stress_Index
+  - GPA
+  - Semester_GPA
+  - CGPA
+
+categorical_features:
+  - Gender
+  - Internet_Access
+  - Part_Time_Job
+  - Scholarship
+  - Semester
+  - Department
+  - Parental_Education
+
+split:
+  train_ratio: 0.80
+  val_ratio: 0.10
+  test_ratio: 0.10
+  random_state: 42
+
+preprocessing:
+  impute_numerical_strategy: median   # also supports: mean
+  impute_categorical_strategy: most_frequent
+  scaler: standard                     # standard | minmax
+
+model:
+  type: random_forest                  # random_forest | logistic_regression | gradient_boosting | xgboost
+  random_state: 42
+  n_estimators: 150
+  max_depth: 6
+  learning_rate: 0.1
+  class_weight: balanced
+
+output:
+  model_dir: models
+  model_filename: dropout_model.pkl
+  preprocessor_filename: preprocessor.pkl
+  metrics_filename: metrics.json

@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+*.txt
+!requirements.txt
+!README.md
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Models (keep trained models, ignore intermediate)
+models/*.pkl
+models/*.joblib
+models/*.json
+
+# Data (keep raw, ignore generated/processed for clean checkout)
+dataset/processed/
+!dataset/processed/.gitkeep
+
+# Dropout dashboard (generated artifacts)
+frontend/dashboard_preview.html
+src/__pycache__/
+src/*.pyc
+
+# Environment
+.env
+.env.local
+.env.*
+!.env.example
+
+# Firebase Admin SDK service-account credentials
+# NEVER commit these - they grant full administrative access to the project.
+*serviceAccount*.json
+*service-account*.json
+firebase-adminsdk*.json
+firebase-service-account*.json
+
+# Generated Firebase web config (populated per environment)
+frontend/js/firebase-config.js
+
+# Firestore emulator debug output
+firestore-debug.log
+firebase-debug.log
+.firebase/
+
+# Migration report (contains password-reset links = credentials)
+migration_report.csv
+
+# Local SQLite database
+backend/users.db
+*.db

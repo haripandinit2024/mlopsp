@@ -1,0 +1,198 @@
+rules_version = '2';
+
+// ============================================================
+//  Cloud Firestore security rules
+//  Student Dropout / Academic Analyser / Intervention Platform
+//
+//  Principle: DENY BY DEFAULT. Nothing is readable or writable unless an
+//  explicit rule below allows it.
+//
+//  IMPORTANT — these rules protect *client* (browser/mobile) access only.
+//  The Flask backend uses the Firebase Admin SDK, which BYPASSES these rules
+//  entirely. Backend authorization is implemented separately in
+//  backend/authorization.py and is the real enforcement point for the API.
+//
+//  Roles live in users/{uid}.role and are the single source of truth.
+//  Firebase Storage is intentionally NOT used anywhere in this project.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(uid());
+    }
+
+    function userDoc() {
+      return get(userPath()).data;
+    }
+
+    function hasProfile() {
+      return isSignedIn() && exists(userPath());
+    }
+
+    // Role is only ever read from the stored profile, never from the request.
+    function role() {
+      return hasProfile() ? userDoc().role : '';
+    }
+
+    function isStudent() { return role() == 'student'; }
+    function isFaculty() { return role() == 'faculty'; }
+    function isAdmin()   { return role() == 'admin'; }
+    function isStaff()   { return isFaculty() || isAdmin(); }
+
+    // The studentId (roster id) this account is linked to, if any.
+    function ownStudentId() {
+      return hasProfile() ? userDoc().studentId : null;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Only touch fields we know about.
+    function onlyFields(allowed) {
+      return incoming().keys().hasOnly(allowed);
+    }
+
+    // Field is unchanged by this update.
+    function unchanged(field) {
+      return incoming()[field] == existing()[field];
+    }
+
+    function inRange(value, lo, hi) {
+      return value is number && value >= lo && value <= hi;
+    }
+
+    // ---------- users ----------
+    // Own profile, or any profile if admin. Role can never be self-escalated.
+    match /users/{userId} {
+      allow read: if isSignedIn() && (userId == uid() || isAdmin());
+
+      allow create: if isSignedIn()
+                    && userId == uid()
+                    && onlyFields(['uid', 'name', 'email', 'role', 'status',
+                                   'studentId', 'createdAt', 'updatedAt'])
+                    && incoming().uid == uid()
+                    && incoming().role == 'student'   // privileged roles are provisioned server-side
+                    && incoming().status == 'active';
+
+      allow update: if isAdmin()
+                    || (userId == uid()
+                        && unchanged('uid')
+                        && unchanged('role')          // no self-escalation
+                        && unchanged('studentId')
+                        && unchanged('createdAt'));
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- students ----------
+    // A student may read only the roster record their account is linked to.
+    match /students/{studentId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().userId == uid());
+
+      // Roster records are authoritative data; only staff maintain them.
+      allow create, update: if isAdmin() || isFaculty();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- academic records ----------
+    match /academic_records/{recordId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().userId == uid());
+
+      // Numeric contract enforced here as well as in the backend service.
+      allow create, update: if isStaff()
+                            && onlyFields(['studentId', 'userId', 'subject', 'semester',
+                                           'academicYear', 'internalMarks',
+                                           'assignmentMarks', 'attendance', 'backlog',
+                                           'grade', 'createdAt', 'updatedAt'])
+                            && inRange(incoming().attendance, 0, 100)
+                            && inRange(incoming().internalMarks, 0, 100)
+                            && inRange(incoming().assignmentMarks, 0, 100);
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- attendance ----------
+    match /attendance/{recordId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().studentId == uid());
+      allow create, update: if isStaff()
+                            && onlyFields(['studentId', 'subjectCode', 'subjectName',
+                                           'semester', 'classesAttended', 'totalClasses',
+                                           'attendancePercentage', 'createdAt', 'updatedAt'])
+                            && inRange(incoming().classesAttended, 0, 10000)
+                            && inRange(incoming().totalClasses, 0, 10000)
+                            && inRange(incoming().attendancePercentage, 0, 100);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- assessments ----------
+    match /assessments/{assessmentId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().studentId == uid());
+      allow create, update: if isStaff()
+                            && onlyFields(['studentId', 'subjectCode', 'subjectName',
+                                           'assessmentType', 'marks', 'maxMarks',
+                                           'semester', 'assessmentDate', 'createdAt', 'updatedAt'])
+                            && inRange(incoming().marks, 0, incoming().maxMarks)
+                            && inRange(incoming().maxMarks, 0.01, 1000);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- predictions ----------
+    // Written by the ML service (Admin SDK). Students may NEVER create or
+    // modify a prediction - that is the whole point of the audit trail.
+    match /predictions/{predictionId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().userId == uid());
+      allow create, update, delete: if false;
+    }
+
+    // ---------- interventions ----------
+    match /interventions/{interventionId} {
+      allow read: if isStaff()
+                  || (isStudent() && existing().userId == uid());
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- notifications ----------
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && existing().recipientUid == uid();
+      // Marking your own notification as read is the only client write.
+      allow update: if isSignedIn()
+                    && existing().recipientUid == uid()
+                    && onlyFields(['read']);
+      allow create, delete: if false;
+    }
+
+    // ---------- model versions ----------
+    match /model_versions/{modelVersionId} {
+      allow read: if isStaff();
+      allow write: if false;   // produced by the training pipeline
+    }
+
+    // ---------- audit logs ----------
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;   // append-only, written server-side
+    }
+
+    // ---------- catch-all: deny anything not matched above ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

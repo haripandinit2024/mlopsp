@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DROPpredict - Login</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/js/theme.js
+    <script src="/js/controls.js"></script>"></script>
+    <script src="/js/i18n.js"></script>
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="auth-logo">
+                    <span class="logo-icon">&#x1F393;</span>
+                    <h1>DROPpredict</h1>
+                </div>
+                <p class="auth-subtitle" data-i18n="brand.tagline">Student Risk Analytics Platform</p>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login" data-i18n="auth.loginTab">Login</button>
+                <button class="auth-tab" data-tab="signup" data-i18n="auth.signupTab">Sign Up</button>
+            </div>
+
+            <!-- Login Form -->
+            <form class="auth-form active" id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail" data-i18n="auth.email">Email</label>
+                    <input type="email" id="loginEmail" placeholder="you@university.edu" data-i18n-ph="auth.emailPh">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword" data-i18n="auth.password">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" data-i18n-ph="auth.passPh">
+                </div>
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="rememberMe">
+                        <span data-i18n="auth.remember">Remember me</span>
+                    </label>
+                    <a href="/settings.html" class="forgot-link" data-i18n="auth.forgot">Forgot password?</a>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.loginBtn">Login</button>
+                <div class="auth-divider">
+                    <span data-i18n="auth.or">or continue with</span>
+                </div>
+                <button type="button" class="btn btn-google btn-block" id="googleSignInBtn" onclick="handleGoogleSignIn()">
+                    <span>&#x1F310;</span> Continue with Google
+                </button>
+                <div class="social-buttons">
+                    <button type="button" class="btn btn-social" id="studentPortalBtn">
+                        <span>&#x1F464;</span> <span data-i18n="auth.studentPortal">Student Portal</span>
+                    </button>
+                    <button type="button" class="btn btn-social" id="facultyPortalBtn">
+                        <span>&#x1F468;&#x200D;&#x1F3EB;</span> <span data-i18n="auth.facultyPortal">Faculty Portal</span>
+                    </button>
+                    <button type="button" class="btn btn-social" id="adminPortalBtn">
+                        <span>&#x1F4E1;</span> <span data-i18n="auth.adminPortal">Administrator Portal</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- Signup Form -->
+            <form class="auth-form" id="signupForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="signupFirstName" data-i18n="auth.first">First Name</label>
+                        <input type="text" id="signupFirstName" placeholder="John" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupLastName" data-i18n="auth.last">Last Name</label>
+                        <input type="text" id="signupLastName" placeholder="Doe" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail" data-i18n="auth.email">Email</label>
+                    <input type="email" id="signupEmail" placeholder="you@university.edu" data-i18n-ph="auth.emailPh" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupRole" data-i18n="auth.role">Role</label>
+                    <select id="signupRole" required>
+                        <option value="" data-i18n="auth.rolePh">Select your role</option>
+                        <option value="student" data-i18n="auth.roleStudent">Student</option>
+                        <option value="faculty" data-i18n="auth.roleFaculty">Faculty</option>
+                        <option value="admin" data-i18n="auth.roleAdmin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="signupInviteGroup">
+                    <label for="signupInviteCode">Invite Code</label>
+                    <input type="password" id="signupInviteCode" placeholder="Required for faculty / administrator">
+                </div>
+                <div class="form-group hidden" id="signupStudentIdGroup">
+                    <label for="signupStudentId">Student ID</label>
+                    <input type="number" id="signupStudentId" min="1" max="10000" placeholder="Your student ID, e.g. 42">
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword" data-i18n="auth.password">Password</label>
+                    <input type="password" id="signupPassword" placeholder="Create a password" data-i18n-ph="auth.passCreate">
+                    <div class="password-strength" id="passwordStrength">
+                        <div class="strength-bar"></div>
+                        <div class="strength-bar"></div>
+                        <div class="strength-bar"></div>
+                        <div class="strength-bar"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupConfirmPassword" data-i18n="auth.confirm">Confirm Password</label>
+                    <input type="password" id="signupConfirmPassword" placeholder="Confirm your password" data-i18n-ph="auth.confirmPh" required>
+                </div>
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="agreeTerms" required>
+                        <span data-i18n-html="auth.terms">I agree to the <a href="/settings.html">Terms of Service</a> and <a href="/settings.html">Privacy Policy</a></span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.createBtn">Create Account</button>
+                <div class="auth-divider">
+                    <span data-i18n="auth.or">or continue with</span>
+                </div>
+                <button type="button" class="btn btn-google btn-block" id="googleSignInBtnSignup" onclick="handleGoogleSignIn()">
+                    <span>&#x1F310;</span> Continue with Google
+                </button>
+            </form>
+
+            <!-- Success Message -->
+            <div class="auth-success hidden" id="authSuccess">
+                <div class="success-icon">&#x2714;</div>
+                <h3 id="successTitle" data-i18n="auth.successTitle">Account Created!</h3>
+                <p id="successMessage">Your account has been created successfully.</p>
+                <button class="btn btn-primary" onclick="showForm('login')" data-i18n="auth.successLogin">Proceed to Login</button>
+            </div>
+
+            <div class="auth-footer">
+                <p id="authFooterText">Don't have an account? <a href="/settings.html" onclick="showForm('signup'); return false;">Sign up</a></p>
+            </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="auth-preview">
+            <div class="preview-content">
+                <h2>Student Dropout Risk Dashboard</h2>
+                <p>Predict and prevent student dropout with AI-powered analytics</p>
+                <div class="preview-features">
+                    <div class="preview-feature">
+                        <span class="feature-icon">&#x1F4CA;</span>
+                        <span>Real-time Risk Assessment</span>
+                    </div>
+                    <div class="preview-feature">
+                        <span class="feature-icon">&#x1F468;&#x200D;&#x1F3EB;</span>
+                        <span>Faculty Monitoring Tools</span>
+                    </div>
+                    <div class="preview-feature">
+                        <span class="feature-icon">&#x1F393;</span>
+                        <span>Personalized Recommendations</span>
+                    </div>
+                    <div class="preview-feature">
+                        <span class="feature-icon">&#x1F4E1;</span>
+                        <span>Institution-wide Analytics</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/controls.js"></script>
+
+    <!--
+      Firebase Authentication + Cloud Firestore only.
+      firebase-config.js is generated per environment and gitignored:
+        python scripts/generate_firebase_config.py
+      If it is missing the page falls back to the legacy session flow.
+    -->
+    <script src="/js/firebase-config.js"></script>
+    <script type="module" src="/js/firebase.js"></script>
+    <script type="module" src="/js/firebase-auth.js"></script>
+</body>
+</html>
