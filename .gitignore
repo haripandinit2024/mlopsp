@@ -50,6 +50,8 @@ dataset/processed/
 
 # Dropout dashboard (generated artifacts)
 frontend/dashboard_preview.html
+frontend/public/dashboard_preview.html
+frontend/public/js/
 src/__pycache__/
 src/*.pyc
 

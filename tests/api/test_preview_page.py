@@ -24,14 +24,15 @@ class PreviewPageTestCase(AppTestCase):
 
     def setUp(self):
         super().setUp()
-        self.frontend_dir = Path(self.tmpdir) / "frontend"
-        self.frontend_dir.mkdir()
-        self._orig_frontend_dir = app_module.FRONTEND_DIR
-        app_module.FRONTEND_DIR = self.frontend_dir
-        self.preview_path = self.frontend_dir / PREVIEW_FILENAME
+        # The route reads PREVIEW_DIR (frontend/public, shared with the Vite app).
+        self.preview_dir = Path(self.tmpdir) / "public"
+        self.preview_dir.mkdir()
+        self._orig_preview_dir = app_module.PREVIEW_DIR
+        app_module.PREVIEW_DIR = self.preview_dir
+        self.preview_path = self.preview_dir / PREVIEW_FILENAME
 
     def tearDown(self):
-        app_module.FRONTEND_DIR = self._orig_frontend_dir
+        app_module.PREVIEW_DIR = self._orig_preview_dir
         super().tearDown()
 
     def write_preview(self):

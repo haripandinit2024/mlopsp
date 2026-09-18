@@ -1,12 +1,31 @@
 """Generate a professional, self-contained HTML dashboard from real roster data."""
 import json
+import shutil
 from pathlib import Path
 
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROSTER_CSV = BASE_DIR / "dataset" / "processed" / "student_risk_scores.csv"
-OUTPUT_HTML = BASE_DIR / "frontend" / "dashboard_preview.html"
+
+# Vite serves everything under `frontend/public` at the site root and copies it
+# into `dist` on build, so generating there makes the preview reachable from
+# `npm run dev`, `npm run preview` AND the Flask `/preview` route (which reads
+# the same file). Nothing here is committed - it is all derived from the roster.
+PUBLIC_DIR = BASE_DIR / "frontend" / "public"
+OUTPUT_HTML = PUBLIC_DIR / "dashboard_preview.html"
+PUBLIC_JS_DIR = PUBLIC_DIR / "js"
+ASSET_FILES = ("theme.js", "i18n.js", "controls.js")
+
+
+def copy_assets():
+    """Place the page's same-origin scripts beside it so Vite will serve them."""
+    source_js = BASE_DIR / "frontend" / "js"
+    PUBLIC_JS_DIR.mkdir(parents=True, exist_ok=True)
+    for name in ASSET_FILES:
+        source = source_js / name
+        if source.is_file():
+            shutil.copyfile(source, PUBLIC_JS_DIR / name)
 
 
 def main():
@@ -28,7 +47,9 @@ def main():
     for prefix in ("me", "fm", "am"):
         html = html.replace(f"<<{prefix.upper()}_PANEL>>", MANUAL_PANEL.replace("{{P}}", prefix))
 
+    OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_HTML.write_text(html, encoding="utf-8")
+    copy_assets()
     print(f"Wrote {OUTPUT_HTML}")
 
 
@@ -303,7 +324,7 @@ body { top: 0 !important; }
     </div>
     <div class="topbar-actions">
       <div class="pill" id="updated-pill">Live data</div>
-      <a class="pill topbar-link" href="/login">Sign in</a>
+      <a class="pill topbar-link" href="/login" target="_top">Sign in</a>
     </div>
   </header>
 
@@ -475,6 +496,24 @@ function tierColor(t) {
   return t === "High" ? "#ff7d7d" : t === "Medium" ? "#ffcb6b" : "#66e3a0";
 }
 
+// Chart.js comes from a CDN. If it fails to load, `new Chart(...)` would throw
+// and kill every script below it (tabs, lookup, manual entry), so all chart
+// creation goes through this guard instead.
+function makeChart(canvas, config) {
+  if (!window.Chart) return null;
+  return new Chart(canvas, config);
+}
+
+// Charts drawn while their view is hidden measure 0x0 and stay blank after the
+// view is shown (a tab switch fires no window resize), so resize them on show.
+function resizeCharts(root) {
+  if (!window.Chart || !Chart.getChart) return;
+  root.querySelectorAll("canvas").forEach(function (canvas) {
+    var chart = Chart.getChart(canvas);
+    if (chart) chart.resize();
+  });
+}
+
 // ---------- Overview ----------
 (function () {
   const total = records.length;
@@ -489,25 +528,25 @@ function tierColor(t) {
     ["Actual dropout rate", fmtPct(dropout), "Historical ground truth"],
   ].map(([l, v, n]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
 
-  new Chart(document.getElementById("chart-tier"), {
+  makeChart(document.getElementById("chart-tier"), {
     type: "doughnut",
     data: {
       labels: ["Low", "Medium", "High"],
       datasets: [{ data: [records.filter(r => r.Risk_Tier === "Low").length, medium, high],
         backgroundColor: ["#66e3a0", "#ffcb6b", "#ff7d7d"], borderWidth: 0 }]
     },
-    options: { plugins: { legend: { labels: { color: "#9bb0c9" } } }, cutout: "62%" }
+    options: { maintainAspectRatio: false, plugins: { legend: { labels: { color: "#9bb0c9" } } }, cutout: "62%" }
   });
 
   const bins = Array(10).fill(0);
   records.forEach(r => { bins[Math.min(9, Math.floor(r.Risk_Probability * 10))]++; });
-  new Chart(document.getElementById("chart-hist"), {
+  makeChart(document.getElementById("chart-hist"), {
     type: "bar",
     data: {
       labels: Array.from({ length: 10 }, (_, i) => `${i * 10}–${i * 10 + 10}%`),
       datasets: [{ data: bins, backgroundColor: "rgba(97,223,255,0.7)", borderRadius: 6 }]
     },
-    options: { plugins: { legend: { display: false } },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
                 y: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } } } }
   });
@@ -607,14 +646,14 @@ function tierColor(t) {
     const sub = records.filter(r => r.Department === d);
     return sub.reduce((s, r) => s + r.Risk_Probability, 0) / sub.length;
   });
-  new Chart(document.getElementById("chart-dept"), {
+  makeChart(document.getElementById("chart-dept"), {
     type: "bar",
     data: {
       labels: DATA.departments,
       datasets: [{ data: deptAvg.map(v => +(v * 100).toFixed(1)), backgroundColor: DATA.departments.map((_, i) =>
         ["#61dfff", "#22c7d7", "#ffcb6b", "#66e3a0", "#ff7d7d"][i % 5]), borderRadius: 8 }]
     },
-    options: { plugins: { legend: { display: false } },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
                 y: { ticks: { color: "#9bb0c9", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.05)" } } } }
   });
@@ -623,13 +662,13 @@ function tierColor(t) {
     const sub = records.filter(r => r.Semester === y);
     return sub.reduce((s, r) => s + r.Risk_Probability, 0) / sub.length;
   });
-  new Chart(document.getElementById("chart-year"), {
+  makeChart(document.getElementById("chart-year"), {
     type: "bar",
     data: {
       labels: DATA.semesters,
       datasets: [{ data: yearAvg.map(v => +(v * 100).toFixed(1)), backgroundColor: "rgba(255,203,107,0.75)", borderRadius: 8 }]
     },
-    options: { plugins: { legend: { display: false } },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
                 y: { ticks: { color: "#9bb0c9", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.05)" } } } }
   });
@@ -707,14 +746,32 @@ initManualEntry("fm");
 initManualEntry("am");
 
 // ---------- Tabs ----------
+function activateView(view) {
+  const target = document.getElementById("view-" + view);
+  if (!target) return;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  target.classList.add("active");
+  // Draw any charts that were created while this view was hidden.
+  resizeCharts(target);
+  if (view === "settings" && window.I18N) initPreviewSettings();
+}
+
 document.getElementById("tabs").addEventListener("click", e => {
   const btn = e.target.closest("button");
   if (!btn) return;
-  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === btn));
-  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  document.getElementById("view-" + btn.dataset.view).classList.add("active");
-  if (btn.dataset.view === "settings" && window.I18N) initPreviewSettings();
+  activateView(btn.dataset.view);
 });
+
+// Deep link: /preview#admin opens directly on that view.
+(function () {
+  const requested = (window.location.hash || "").replace("#", "");
+  const known = requested && document.getElementById("view-" + requested);
+  activateView(known ? requested : "overview");
+})();
+
+// Keep charts correct when the window is resized.
+window.addEventListener("resize", function () { resizeCharts(document); });
 
 function initPreviewSettings() {
   var i18n = window.I18N;

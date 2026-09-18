@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "generate:preview": "node scripts/generate-preview.mjs",
+    "dev": "npm run generate:preview && vite",
+    "build": "npm run generate:preview && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },

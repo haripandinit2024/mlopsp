@@ -263,6 +263,9 @@ def dashboard():
 
 
 PREVIEW_FILENAME = "dashboard_preview.html"
+# Vite serves `frontend/public` at the site root and copies it into `dist`, so
+# the generator writes there and both front ends read the one generated file.
+PREVIEW_DIR = FRONTEND_DIR / "public"
 _preview_generation_lock = threading.Lock()
 
 
@@ -303,7 +306,7 @@ def _ensure_preview_current() -> str | None:
     generator reads local files only (no request data), and regeneration is
     serialised so concurrent requests do not rewrite the file simultaneously.
     """
-    preview_path = FRONTEND_DIR / PREVIEW_FILENAME
+    preview_path = PREVIEW_DIR / PREVIEW_FILENAME
     if not _preview_is_stale(preview_path):
         return None
 
@@ -351,7 +354,7 @@ def preview():
     error = _ensure_preview_current()
     if error:
         return error + "\n", 503
-    return send_from_directory(str(FRONTEND_DIR), PREVIEW_FILENAME)
+    return send_from_directory(str(PREVIEW_DIR), PREVIEW_FILENAME)
 
 
 @app.route("/css/<path:filename>")
