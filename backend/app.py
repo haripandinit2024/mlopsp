@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sys
+import threading
 from functools import wraps
 from pathlib import Path
 
@@ -224,7 +225,7 @@ def add_security_headers(response):
         "default-src 'self'; "
         "img-src 'self' data: https://www.gstatic.com https://images.google.com https://*.googleusercontent.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-hashes' https://www.gstatic.com https://www.google.com https://*.google.com https://*.firebaseapp.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-hashes' https://www.gstatic.com https://www.google.com https://*.google.com https://*.firebaseapp.com https://cdn.jsdelivr.net; "
         "font-src 'self' data: https://fonts.gstatic.com; "
         "connect-src 'self' https://www.gstatic.com https://*.firebaseio.com https://*.firestore.googleapis.com https://firestore.googleapis.com https://*.googleapis.com https://*.google.com https://*.firebaseapp.com; "
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
@@ -259,6 +260,98 @@ def login():
 @login_required
 def dashboard():
     return send_from_directory(str(FRONTEND_DIR), "dashboard.html")
+
+
+PREVIEW_FILENAME = "dashboard_preview.html"
+_preview_generation_lock = threading.Lock()
+
+
+def _preview_generator_module():
+    """Import the preview generator lazily, or return None when unavailable."""
+    try:
+        import src.generate_dashboard_preview as generator
+    except ImportError:
+        return None
+    return generator
+
+
+def _preview_is_stale(preview_path: Path) -> bool:
+    """True when the preview is missing or older than the roster it renders.
+
+    A missing source roster is not treated as staleness - there is nothing to
+    regenerate from, so the existing page is served as-is rather than failing.
+    """
+    if not preview_path.is_file():
+        return True
+
+    generator = _preview_generator_module()
+    if generator is None:
+        return False
+
+    try:
+        if not generator.ROSTER_CSV.is_file():
+            return False
+        return generator.ROSTER_CSV.stat().st_mtime > preview_path.stat().st_mtime
+    except OSError:
+        return False
+
+
+def _ensure_preview_current() -> str | None:
+    """Regenerate the standalone preview when it is missing or out of date.
+
+    Returns None on success, otherwise a human-readable error message. The
+    generator reads local files only (no request data), and regeneration is
+    serialised so concurrent requests do not rewrite the file simultaneously.
+    """
+    preview_path = FRONTEND_DIR / PREVIEW_FILENAME
+    if not _preview_is_stale(preview_path):
+        return None
+
+    with _preview_generation_lock:
+        # Another request may have refreshed it while we waited for the lock.
+        if not _preview_is_stale(preview_path):
+            return None
+
+        generator = _preview_generator_module()
+        if generator is None:
+            return (
+                "The dashboard preview is out of date and its generator could "
+                "not be imported. Run: python src/generate_dashboard_preview.py"
+            )
+
+        try:
+            generator.main()
+        except FileNotFoundError:
+            return (
+                "The dashboard preview could not be generated because the "
+                "scored roster (dataset/processed/student_risk_scores.csv) is "
+                "missing. Run: python src/score_all_students.py"
+            )
+        except Exception:
+            return (
+                "The dashboard preview could not be generated. "
+                "Run: python src/generate_dashboard_preview.py"
+            )
+
+    if not preview_path.is_file():
+        return "The dashboard preview generator did not produce a file."
+    return None
+
+
+@app.route("/preview")
+def preview():
+    """Public, standalone dashboard preview (a generated artifact).
+
+    Served without authentication so it can be linked from the login page.
+    It renders only the synthetic roster that already ships in this repository
+    (dataset/raw/student_dropout_dataset_v3.csv); no live per-user data is
+    exposed. Regenerated on demand when the file is absent or older than the
+    scored roster it is built from.
+    """
+    error = _ensure_preview_current()
+    if error:
+        return error + "\n", 503
+    return send_from_directory(str(FRONTEND_DIR), PREVIEW_FILENAME)
 
 
 @app.route("/css/<path:filename>")
@@ -585,7 +678,7 @@ def overview():
 
 
 @app.route("/api/faculty/<department>")
-@role_required("faculty")
+@roles_required("faculty", "admin")
 def faculty_list(department):
     """Get at-risk students for a department."""
     semester = request.args.get("semester", "All")

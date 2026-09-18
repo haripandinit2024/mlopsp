@@ -126,8 +126,13 @@ def academic_records(student_id):
     if not isinstance(data, dict):
         return jsonify({"error": "Request body must be a JSON object"}), 400
 
+    # The record belongs to the student in the URL, never to a client-supplied
+    # id - otherwise a staff member could write into another student's record.
+    payload = dict(data)
+    payload["studentId"] = student_id
+
     try:
-        record_id = firestore_service.create_academic_record(data)
+        record_id = firestore_service.create_academic_record(payload)
     except firestore_service.NotConfigured:
         return jsonify({"error": "Database unavailable"}), 503
     except ValueError as exc:

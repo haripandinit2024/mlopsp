@@ -8,6 +8,7 @@ Isolation strategy: `auth` and `interventions` both read their module-level
 DB_PATH inside `_connect()`, so pointing that global at a fresh temp file
 per test gives us a clean database without touching backend/users.db.
 """
+import os
 import shutil
 import sys
 import tempfile
@@ -31,6 +32,12 @@ class AppTestCase(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp(prefix="dropout_test_")
         self.db_path = Path(self.tmpdir) / "test_users.db"
 
+        # These suites exercise the SQLite-backed legacy identity store, so pin
+        # the backend regardless of what `.env` sets. Without this the suite
+        # silently follows AUTH_BACKEND=firebase and fails against no fakes.
+        self._orig_backend = os.environ.get("AUTH_BACKEND")
+        os.environ["AUTH_BACKEND"] = "legacy"
+
         self._orig_paths = (auth.DB_PATH, interventions.DB_PATH)
         auth.DB_PATH = self.db_path
         interventions.DB_PATH = self.db_path
@@ -43,6 +50,10 @@ class AppTestCase(unittest.TestCase):
 
     def tearDown(self):
         auth.DB_PATH, interventions.DB_PATH = self._orig_paths
+        if self._orig_backend is None:
+            os.environ.pop("AUTH_BACKEND", None)
+        else:
+            os.environ["AUTH_BACKEND"] = self._orig_backend
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     # ---------------- helpers ----------------

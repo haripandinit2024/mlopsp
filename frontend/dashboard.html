@@ -34,6 +34,18 @@
         .logout-btn:hover {
             background: var(--danger);
         }
+        .preview-btn {
+            display: block;
+            width: 100%;
+            margin-top: 0.75rem;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+        }
+        .preview-btn:hover {
+            background: var(--primary, #22c7d7);
+        }
     </style>
 </head>
 <body>
@@ -58,6 +70,7 @@
                 <div class="model-status" id="modelStatus">
                     <span class="status-dot"></span><span>Model Active</span>
                 </div>
+                <a class="btn preview-btn" href="/preview" target="_blank" rel="noopener">Open Live Preview</a>
                 <button class="btn logout-btn" id="logoutBtn">Logout</button>
             </div>
         </aside>

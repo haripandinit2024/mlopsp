@@ -149,6 +149,12 @@ body::before {
   padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px;
   color: var(--muted); background: rgba(255,255,255,0.03); white-space: nowrap;
 }
+.topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.topbar-link {
+  text-decoration: none; color: var(--text);
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.topbar-link:hover { border-color: var(--cyan); color: var(--cyan); }
 .tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 22px; }
 .tabs button {
   appearance: none; border: 1px solid var(--line);
@@ -295,7 +301,10 @@ body { top: 0 !important; }
         <p>Live dashboard · real model output on the full 10,000-student roster</p>
       </div>
     </div>
-    <div class="pill" id="updated-pill">Live data</div>
+    <div class="topbar-actions">
+      <div class="pill" id="updated-pill">Live data</div>
+      <a class="pill topbar-link" href="/login">Sign in</a>
+    </div>
   </header>
 
 <nav class="tabs" id="tabs">
