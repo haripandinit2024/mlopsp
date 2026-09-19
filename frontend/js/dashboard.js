@@ -19,11 +19,11 @@ const VIEW_LABEL = (view, i) => {
 };
 
 const NAV_ITEMS = {
-    student: '&#x1F393;',
-    faculty: '&#x1F468;&#x200D;&#x1F3EB;',
-    admin: '&#x1F4E1;',
-    interventions: '&#x1FA9E;',
-    settings: '&#x2699;&#xFE0F;',
+    student: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>',
+    faculty: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    admin: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    interventions: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 
 const ROLE_MENUS = {
@@ -45,27 +45,51 @@ async function initDashboard() {
 
     // The server session is authoritative for this page (it is what shows the
     // HTML), but it can expire while the Firebase client session is still
-    // valid. Re-establish it in the background so the next navigation works.
-    if (window.AppAuth && window.AppAuth.configured && window.AppAuth.currentUser) {
-        window.AppAuth.establishSession().catch(() => {});
-        window.AppAuth.startSessionHeartbeat();
-    }
+    // valid. Re-establish it ONLY when making API calls, not on a heartbeat.
+    // This prevents unnecessary redirects when the session is still valid.
+    // Heartbeat is disabled - we'll re-auth on 401 responses instead.
 
     let user = null;
     try {
-        const res = await fetch('/api/auth/me');
-        if (res.ok) {
-            const data = await res.json();
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+            const data = await meRes.json();
             user = data.user;
+        } else if (meRes.status === 401) {
+            // Session expired - try to re-establish it once.
+            if (window.AppAuth && window.AppAuth.configured && window.AppAuth.currentUser) {
+                try {
+                    await window.AppAuth.establishSession();
+                    const retryRes = await fetch('/api/auth/me');
+                    if (retryRes.ok) {
+                        const retryData = await retryRes.json();
+                        user = retryData.user;
+                    }
+                } catch (reAuthError) {
+                    console.warn('[dashboard] Re-auth failed:', reAuthError);
+                }
+            }
         }
     } catch (e) { /* ignore, handled below */ }
 
-    if (!user || !ROLE_MENUS[user.role]) {
+    // Leave /login when there is genuinely no authenticated identity. Only a
+    // real 401 (expired/absent session that could not be re-established) or a
+    // failed boot path reaches this — no heartbeat is running, so a healthy
+    // session never bounces through here on its own.
+    if (!user) {
         window.location.href = '/login';
         return;
     }
 
-    document.getElementById('userName').textContent = user.name;
+    // Safe rendering: an identity with a role we don't know must not crash the
+    // shell (user.name / role lookups below). Redirect instead of throwing.
+    if (!ROLE_MENUS[user.role]) {
+        console.warn('[dashboard] Unsupported role:', user.role);
+        window.location.href = '/login';
+        return;
+    }
+
+    document.getElementById('userName').textContent = user.name || 'User';
     document.getElementById('userRole').textContent = user.role;
 
     // Build the nav from the role menu
@@ -112,12 +136,36 @@ function switchView(view, role) {
     document.getElementById('viewTitle').textContent = VIEW_LABEL(view, 0);
     document.getElementById('viewSubtitle').textContent = VIEW_LABEL(view, 1);
 
+    if (view === 'student' && typeof loadStudentDashboard === 'function') loadStudentDashboard();
     if (view === 'faculty') loadFacultyStudents();
     if (view === 'admin') loadAdminOverview();
     if (view === 'settings') initSettingsPanelContents();
     if (view === 'interventions' && typeof initInterventions === 'function') {
         initInterventions(role || window.__currentRole);
     }
+}
+
+// Safe fetch wrapper that handles 401 by re-authenticating
+async function safeFetch(url, options = {}) {
+    let res = await fetch(url, {
+        credentials: 'same-origin',
+        ...options,
+    });
+    
+    // If we get a 401, try to re-establish the session
+    if (res.status === 401 && window.AppAuth && window.AppAuth.configured && window.AppAuth.currentUser) {
+        try {
+            await window.AppAuth.establishSession();
+            res = await fetch(url, {
+                credentials: 'same-origin',
+                ...options,
+            });
+        } catch (e) {
+            console.warn('[dashboard] Re-auth failed:', e);
+        }
+    }
+    
+    return res;
 }
 
 function initSettingsPanelContents() {
@@ -141,7 +189,6 @@ window.enableSettingsPanel = function () {
     themeButtons.forEach(b => {
         b.onclick = () => window.Theme.set(b.getAttribute('data-theme-opt'));
     });
-    if (window.Theme) window.Theme.set(window.Theme.get());
 
     const grid = document.getElementById('settingsLangGrid');
     if (grid && grid.childElementCount === 0) {
@@ -154,6 +201,24 @@ window.enableSettingsPanel = function () {
             grid.appendChild(b);
         });
     }
+
+    function sync() {
+        if (window.Theme) {
+            const pref = window.Theme.get();
+            themeButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-theme-opt') === pref));
+        }
+        const cur = i18n.get();
+        document.querySelectorAll('#settingsLangGrid [data-lang]').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('data-lang') === cur);
+        });
+    }
+
+    if (!window.__settingsEnabled) {
+        window.__settingsEnabled = true;
+        document.addEventListener('theme:change', sync);
+        document.addEventListener('i18n:change', sync);
+    }
+    sync();
     i18n.apply();
 };
 

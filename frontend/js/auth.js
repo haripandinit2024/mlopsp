@@ -68,24 +68,69 @@ if (passwordInput) {
 // once they are.
 const AuthMode = {
     backend: 'legacy',
+    firebaseReady: false,
 
     async detect() {
         try {
             const res = await fetch('/api/health');
             const data = await res.json();
             this.backend = (data.auth && data.auth.backend) || 'legacy';
+            this.firebaseReady = this.backend === 'firebase';
         } catch (error) {
             this.backend = 'legacy';
+            this.firebaseReady = false;
         }
+        
+        // Update UI based on auth mode
+        this.updateAuthUI();
         return this.backend;
+    },
+
+    updateAuthUI() {
+        const googleBtns = document.querySelectorAll('#googleSignInBtn, #googleSignInBtnSignup');
+        const googleSection = document.querySelector('.auth-divider');
+        const socialButtons = document.querySelector('.social-buttons');
+        
+        if (!this.firebaseReady) {
+            // Hide Google Sign-In buttons and show a message
+            googleBtns.forEach(btn => {
+                if (btn) {
+                    btn.style.display = 'none';
+                }
+            });
+            
+            // Show a message about Google sign-in being unavailable
+            if (googleSection && socialButtons) {
+                const message = document.createElement('div');
+                message.className = 'auth-firebase-unavailable';
+                message.style.cssText = 'text-align: center; padding: 1rem; margin: 1rem 0; color: var(--text-secondary); font-size: 0.875rem;';
+                message.textContent = 'Google Sign-In is not available. Please use email/password to login.';
+                
+                // Insert after the divider
+                googleSection.parentNode.insertBefore(message, googleSection.nextSibling);
+            }
+        } else {
+            // Show Google Sign-In buttons
+            googleBtns.forEach(btn => {
+                if (btn) {
+                    btn.style.display = '';
+                }
+            });
+            
+            // Remove the message if it exists
+            const existingMessage = document.querySelector('.auth-firebase-unavailable');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+        }
     },
 
     get firebase() {
         return this.backend === 'firebase';
     },
 
-    async login(email, password) {
-        if (this.firebase) return window.AppAuth.login(email, password);
+    async login(email, password, profile) {
+        if (this.firebase) return window.AppAuth.login(email, password, profile);
         const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -142,23 +187,33 @@ if (forgotLink) {
     });
 }
 
-// Google Sign-In button handler
+// Google Sign-In button handler with role selection
 async function handleGoogleSignIn() {
-    const btn = document.getElementById('googleSignInBtn');
+    const btn = document.getElementById('googleSignInBtn') || document.getElementById('googleSignInBtnSignup');
     if (!btn) return;
+    
+    // Check if Firebase is configured before proceeding
+    if (!window.AppAuth || !window.AppAuth.configured) {
+        try {
+            const mod = await import('/js/firebase-auth.js');
+            if (!window.AppAuth || !window.AppAuth.configured) {
+                alert('Firebase authentication is not configured. Please use email/password login.');
+                return;
+            }
+        } catch (importError) {
+            console.error('Firebase module failed to load:', importError);
+            alert('Firebase authentication is not configured. Please use email/password login.');
+            return;
+        }
+    }
     
     // Show loading state
     btn.classList.add('loading');
     btn.disabled = true;
     
     try {
-        // Check if Firebase is configured
-        if (!window.AppAuth || !window.AppAuth.configured) {
-            alert('Firebase is not configured. Please contact support.');
-            return;
-        }
-        
-        await window.AppAuth.signInWithGoogle();
+        // Use the new sign-in with role selection for privileged roles
+        await window.AppAuth.signInWithGoogleWithRole();
         // On success, the establishSession will redirect to dashboard
         // or the auth flow will continue
     } catch (error) {
@@ -173,6 +228,10 @@ async function handleGoogleSignIn() {
             message = 'This domain is not authorized for Google Sign-In. Please contact support.';
         } else if (error.code === 'auth/network-request-failed') {
             message = 'Network error. Please check your connection and try again.';
+        } else if (error.status === 403) {
+            message = error.message || 'Invite code is required for this role.';
+        } else if (error.message.includes('not configured')) {
+            message = 'Firebase is not configured. Please use email/password login.';
         }
         
         alert(message);
@@ -182,23 +241,136 @@ async function handleGoogleSignIn() {
     }
 }
 
-// Form submissions
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+// --------------------------------------------------------
+// Google role selection modal (after a successful Google sign-in)
+// --------------------------------------------------------
+(function googleRoleModal() {
+    const modal = document.getElementById('googleRoleModal');
+    const inviteGroup = document.getElementById('googleRoleInviteGroup');
+    const inviteInput = document.getElementById('googleRoleInvite');
+    const studentIdGroup = document.getElementById('googleRoleStudentIdGroup');
+    const studentIdInput = document.getElementById('googleRoleStudentId');
+    const errorText = document.getElementById('googleRoleError');
+    const accountLine = document.getElementById('googleRoleAccount');
+    let resolver = null;
 
+    if (!modal) {
+        window.GoogleRoleModal = null;
+        return;
+    }
+
+    function currentRole() {
+        const checked = modal.querySelector('input[name="googleRole"]:checked');
+        return checked ? checked.value : 'student';
+    }
+
+    function syncFields() {
+        const role = currentRole();
+        inviteGroup.classList.toggle('hidden', !(role === 'faculty' || role === 'admin'));
+        studentIdGroup.classList.toggle('hidden', role !== 'student');
+        errorText.classList.add('hidden');
+        errorText.textContent = '';
+    }
+
+    function show() {
+        const user = window.AppAuth && window.AppAuth.currentUser;
+        const email = (user && user.email) || '';
+        accountLine.textContent = email ? 'Sign in with Google · ' + email : 'Sign in with Google';
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hide() {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        if (resolver) {
+            const r = resolver;
+            resolver = null;
+            r(null);
+        }
+    }
+
+    function resolvePick() {
+        const role = currentRole();
+        const inviteCode = inviteInput.value.trim();
+        const studentIdRaw = studentIdInput.value.trim();
+
+        if (role === 'faculty' || role === 'admin') {
+            if (!inviteCode) {
+                errorText.textContent = 'An invite code is required for ' + role + ' accounts.';
+                errorText.classList.remove('hidden');
+                inviteInput.focus();
+                return;
+            }
+        }
+
+        const payload = { role, inviteCode: inviteCode || null, studentId: null };
+        if (role === 'student') {
+            if (!studentIdRaw || !/^\d+$/.test(studentIdRaw)) {
+                errorText.textContent = 'Enter your Student ID to link your risk profile.';
+                errorText.classList.remove('hidden');
+                studentIdInput.focus();
+                return;
+            }
+            payload.studentId = Number(studentIdRaw);
+        }
+
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        if (resolver) {
+            const r = resolver;
+            resolver = null;
+            r(payload);
+        }
+    }
+
+    modal.querySelectorAll('input[name="googleRole"]').forEach(input => {
+        input.addEventListener('change', syncFields);
+    });
+    document.getElementById('googleRoleConfirm').addEventListener('click', resolvePick);
+    document.getElementById('googleRoleCancel').addEventListener('click', hide);
+    document.getElementById('googleRoleClose').addEventListener('click', hide);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) hide();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) hide();
+    });
+
+    window.GoogleRoleModal = function () {
+        syncFields();
+        inviteInput.value = '';
+        studentIdInput.value = '';
+        show();
+        return new Promise((resolve) => {
+            resolver = resolve;
+        });
+    };
+})();
+
+// Form submissions
+async function submitLoginForm() {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
 
     if (!email || !password) {
         alert('Please fill in all fields');
-        return;
+        return null;
     }
 
+    await AuthMode.detect();
+    const handoff = window.__pendingAuth || null;
+    const user = await AuthMode.login(email, password, handoff);
+    if (handoff) window.__pendingAuth = null;
+    showSuccess('Welcome Back!', `You have successfully logged in as ${user.role}.`);
+    setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+    return user;
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
     try {
-        await AuthMode.detect();
-        const user = await AuthMode.login(email, password);
-        showSuccess('Welcome Back!', `You have successfully logged in as ${user.role}.`);
-        setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+        await submitLoginForm();
     } catch (err) {
         console.error('Login error:', err);
         alert(err.message || 'Unable to reach the server. Please try again.');
@@ -284,24 +456,184 @@ function showSuccess(title, message) {
     successDiv.classList.remove('hidden');
 }
 
-// Auto-fill demo credentials (for testing)
-document.getElementById('studentPortalBtn')?.addEventListener('click', () => {
-    document.getElementById('loginEmail').value = 'student@university.edu';
-    document.getElementById('loginPassword').value = 'password123';
-});
+// Portal quick-logins. The Faculty and Administrator portals are gated by an
+// invite code and, once accepted, sign in and land on the matching dashboard.
+const PORTAL_CREDENTIALS = {
+    student: { email: 'student@university.edu', password: 'password123' },
+    faculty: { email: 'faculty@university.edu', password: 'password123' },
+    admin: { email: 'admin@university.edu', password: 'password123' },
+};
 
-document.getElementById('facultyPortalBtn')?.addEventListener('click', () => {
-    document.getElementById('loginEmail').value = 'faculty@university.edu';
-    document.getElementById('loginPassword').value = 'password123';
-});
+let pendingPortalRole = null;
 
-document.getElementById('adminPortalBtn')?.addEventListener('click', () => {
-    document.getElementById('loginEmail').value = 'admin@university.edu';
-    document.getElementById('loginPassword').value = 'password123';
+function openPortalInviteModal(role) {
+    const modal = document.getElementById('portalInviteModal');
+    if (!modal) { portalLogin(role, ''); return; }
+
+    pendingPortalRole = role;
+    document.getElementById('portalInviteTitle').textContent =
+        role === 'admin' ? 'Administrator access' : 'Faculty access';
+    document.getElementById('portalInviteSub').textContent = role === 'admin'
+        ? 'Enter your administrator invite code to continue to the admin dashboard.'
+        : 'Enter your faculty invite code to continue to the faculty dashboard.';
+
+    const input = document.getElementById('portalInviteInput');
+    const error = document.getElementById('portalInviteError');
+    input.value = '';
+    error.textContent = '';
+    error.classList.add('hidden');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => input.focus(), 0);
+}
+
+function closePortalInviteModal() {
+    const modal = document.getElementById('portalInviteModal');
+    if (modal) modal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function confirmPortalInvite() {
+    const input = document.getElementById('portalInviteInput');
+    const error = document.getElementById('portalInviteError');
+    const confirmBtn = document.getElementById('portalInviteConfirm');
+    const code = (input.value || '').trim();
+
+    if (!code) {
+        error.textContent = 'An invite code is required for this role.';
+        error.classList.remove('hidden');
+        input.focus();
+        return;
+    }
+
+    const original = confirmBtn.textContent;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Checking\u2026';
+    let proceed = true;
+    try {
+        const res = await fetch('/api/auth/invite-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: pendingPortalRole, invite_code: code }),
+        });
+        if (res.status === 403 || res.status === 400) {
+            const data = await res.json().catch(() => ({}));
+            error.textContent = data.error || 'That invite code is not valid.';
+            error.classList.remove('hidden');
+            proceed = false;
+        }
+    } catch {
+        // The API is unavailable (e.g. a static preview build); let the sign-in
+        // step surface any problem instead of blocking the user here.
+    } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = original;
+    }
+
+    if (proceed) {
+        const role = pendingPortalRole;
+        closePortalInviteModal();
+        portalLogin(role, code);
+    }
+}
+
+async function portalLogin(role, inviteCode) {
+    const creds = PORTAL_CREDENTIALS[role];
+    if (!creds) return;
+    document.getElementById('loginEmail').value = creds.email;
+    document.getElementById('loginPassword').value = creds.password;
+    try {
+        await submitLoginForm();
+    } catch (err) {
+        // No demo account for this role on the current deployment (for example
+        // a Firebase-only setup): send the user to registration with the role
+        // and validated invite code already filled in.
+        console.warn('[auth] portal sign-in failed; offering sign-up instead:', err);
+        showForm('signup');
+        signupRoleSelect.value = role;
+        syncSignupFields();
+        const inviteField = document.getElementById('signupInviteCode');
+        if (inviteField && inviteCode) inviteField.value = inviteCode;
+    }
+}
+
+document.getElementById('studentPortalBtn')?.addEventListener('click', () => portalLogin('student', ''));
+document.getElementById('facultyPortalBtn')?.addEventListener('click', () => openPortalInviteModal('faculty'));
+document.getElementById('adminPortalBtn')?.addEventListener('click', () => openPortalInviteModal('admin'));
+document.getElementById('portalInviteConfirm')?.addEventListener('click', confirmPortalInvite);
+document.getElementById('portalInviteCancel')?.addEventListener('click', closePortalInviteModal);
+document.getElementById('portalInviteClose')?.addEventListener('click', closePortalInviteModal);
+document.getElementById('portalInviteInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmPortalInvite(); }
 });
+(function bindPortalModalDismiss() {
+    const modal = document.getElementById('portalInviteModal');
+    if (!modal) return;
+    modal.addEventListener('click', (e) => { if (e.target === modal) closePortalInviteModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closePortalInviteModal();
+    });
+})();
 
 // Keep footer text translated when language changes
 document.addEventListener('i18n:change', () => {
     const activeTab = document.querySelector('.auth-tab.active');
     if (activeTab) showForm(activeTab.dataset.tab);
 });
+
+// Deep link: /login#signup opens the sign-up form directly.
+// A role (plus an invite code for privileged roles) may be handed over by the
+// public preview through sessionStorage or a ?role= / ?invite= query string.
+const SIGNUP_HANDOFF_KEY = 'eduguard_signup_handoff';
+
+function readSignupHandoff() {
+    let handoff = null;
+    try {
+        const raw = sessionStorage.getItem(SIGNUP_HANDOFF_KEY);
+        if (raw) {
+            handoff = JSON.parse(raw);
+            sessionStorage.removeItem(SIGNUP_HANDOFF_KEY);
+        }
+    } catch { /* malformed or unavailable storage */ }
+    if (!handoff || typeof handoff !== 'object') handoff = {};
+
+    const params = new URLSearchParams(window.location.search);
+    const role = String(handoff.role || params.get('role') || '').toLowerCase();
+    const inviteCode = handoff.inviteCode || params.get('invite') || '';
+    // Keep the pending role around for the login path too, so an existing
+    // account can be switched to the requested role on sign-in.
+    window.__pendingAuth = (role === 'student' || role === 'faculty' || role === 'admin')
+        ? { role: role, inviteCode: inviteCode || null }
+        : null;
+    return { role, inviteCode };
+}
+
+function applySignupHandoff(handoff) {
+    if (!handoff || !signupRoleSelect) return false;
+    const allowed = Array.from(signupRoleSelect.options).some(o => o.value === handoff.role);
+    if (!allowed) return false;
+
+    showForm('signup');
+    signupRoleSelect.value = handoff.role;
+    syncSignupFields();
+
+    const inviteInput = document.getElementById('signupInviteCode');
+    if (inviteInput && handoff.inviteCode) inviteInput.value = handoff.inviteCode;
+
+    if ((handoff.role === 'faculty' || handoff.role === 'admin') && inviteInput) {
+        if (!inviteInput.value) setTimeout(() => inviteInput.focus(), 50);
+    }
+    return true;
+}
+
+function applyAuthHash() {
+    const target = (window.location.hash || '').replace('#', '').toLowerCase();
+    if (target === 'signup' || target === 'login') showForm(target);
+    applySignupHandoff(readSignupHandoff());
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyAuthHash);
+} else {
+    applyAuthHash();
+}
+window.addEventListener('hashchange', applyAuthHash);

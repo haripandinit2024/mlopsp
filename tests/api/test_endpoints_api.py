@@ -14,7 +14,8 @@ VALID_PROFILE = {
 
 
 class TestStudentLookup(AppTestCase):
-    """Roster-wide lookups are a staff capability; students see their own record."""
+    """Any authenticated user can browse roster records; students just do not
+    see the ground-truth dropout label, which stays staff-only."""
 
     def test_requires_authentication(self):
         self.assertEqual(self.client.get("/api/student/1").status_code, 401)
@@ -38,9 +39,11 @@ class TestStudentLookup(AppTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()["student_id"], 1)
 
-    def test_student_without_link_is_denied(self):
+    def test_student_without_link_can_still_browse_records(self):
         self.login_as("student", email="unlinked@example.com")
-        self.assertEqual(self.client.get("/api/student/1").status_code, 403)
+        res = self.client.get("/api/student/1")
+        self.assertEqual(res.status_code, 200)
+        self.assertNotIn("actual_dropout", res.get_json())
 
     def test_unknown_student_returns_404(self):
         self.login_as("faculty")
@@ -157,6 +160,26 @@ class TestFacultyEndpoint(AppTestCase):
         res = self.client.get("/api/faculty/CS%27%3B%20DROP%20TABLE%20users%3B--")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json(), [])
+
+    def test_nan_stress_never_leaks_into_response(self):
+        """Roster rows contain NaN Stress_Index; serializing NaN breaks
+        response.json() in browsers (invalid JSON token), blanking the table."""
+        self.login_as("faculty")
+        for dept in ("CS", "Engineering", "Science"):
+            res = self.client.get(f"/api/faculty/{dept}")
+            self.assertEqual(res.status_code, 200, dept)
+            text = res.get_data(as_text=True)
+            self.assertNotIn("NaN", text, dept)
+            self.assertNotIn("Infinity", text, dept)
+            rows = res.get_json()
+            self.assertTrue(all(r["stress"] is None or isinstance(r["stress"], float) for r in rows), dept)
+
+    def test_student_nan_stress_does_not_break_summary(self):
+        self.login_as("faculty")
+        for dept in ("CS", "Engineering", "Science"):
+            res = self.client.get(f"/api/faculty/{dept}/summary")
+            self.assertEqual(res.status_code, 200, dept)
+            self.assertNotIn("NaN", res.get_data(as_text=True), dept)
 
 
 class TestOverviewEndpoint(AppTestCase):

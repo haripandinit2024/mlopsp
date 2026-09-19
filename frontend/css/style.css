@@ -72,17 +72,34 @@ body {
     font-size: 1.75rem;
 }
 
+.logo-img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
+
 .logo h1 {
     font-size: 1.25rem;
     font-weight: 700;
     color: #fff;
     letter-spacing: -0.025em;
+    margin-left: 0.75rem;
 }
 
 .subtitle {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 0.25rem;
+}
+
+.version-badge {
+    font-size: 0.65rem;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-muted);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    font-weight: 500;
 }
 
 .nav-menu {
@@ -389,6 +406,23 @@ body {
 .risk-gauge[data-tier="High"] .gauge-value { color: var(--danger); }
 .risk-gauge[data-tier="High"] .gauge-label { color: var(--danger); }
 
+.overview-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 1rem;
+}
+
+.overview-row .risk-gauge {
+    margin-bottom: 0;
+}
+
+.overview-chart {
+    flex: 1;
+    min-width: 220px;
+}
+
 .risk-bar-container {
     height: 12px;
     background: var(--border);
@@ -646,9 +680,8 @@ body {
 
 .auth-container {
     display: flex;
-    max-width: 1000px;
+    max-width: 520px;
     width: 100%;
-    min-height: 600px;
     background: var(--bg-card);
     border-radius: 20px;
     overflow: hidden;
@@ -679,10 +712,21 @@ body {
     font-size: 2rem;
 }
 
+.auth-logo .logo-img {
+    width: 56px;
+    height: 56px;
+    padding: 10px;
+    object-fit: contain;
+    background: linear-gradient(145deg, #22c7d7, #0e7d8c);
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(34, 199, 215, 0.28);
+}
+
 .auth-logo h1 {
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--primary);
+    margin-left: 0.75rem;
 }
 
 .auth-subtitle {
@@ -781,6 +825,17 @@ body {
     margin: 1.5rem 0;
     color: var(--text-muted);
     font-size: 0.8rem;
+}
+
+.auth-firebase-unavailable {
+    text-align: center;
+    padding: 1rem;
+    margin: 1rem 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--border);
 }
 
 .auth-divider::before,
@@ -1033,7 +1088,7 @@ body {
 }
 
 /* ============================================
-   Theme System (light / dark / system)
+   Theme System (light / dark / system / ocean / sunset / forest)
    ============================================ */
 
 html {
@@ -1050,6 +1105,9 @@ html[data-theme="light"], html:not([data-theme]) {
     --border: #e2e8f0;
     --sidebar-bg: #1e293b;
     --sidebar-text: #cbd5e1;
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #818cf8;
     --danger-light: #fecaca;
     --warning-light: #fef3c7;
     --success-light: #dcfce7;
@@ -1057,78 +1115,163 @@ html[data-theme="light"], html:not([data-theme]) {
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
 }
 
-/* Dark theme */
+/* Dark theme - deep blue-black with distinct accent colors */
 html[data-theme="dark"] {
-    --bg: #0b1220;
-    --bg-card: #141d2e;
-    --text: #e2e8f0;
+    --bg: #0a0e17;
+    --bg-card: #141b29;
+    --text: #e8edf5;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    --border: #273449;
-    --sidebar-bg: #0f172a;
+    --border: #1e293b;
+    --sidebar-bg: #060a12;
     --sidebar-text: #94a3b8;
-    --danger-light: rgba(239, 68, 68, 0.18);
-    --warning-light: rgba(245, 158, 11, 0.18);
-    --success-light: rgba(34, 197, 94, 0.18);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.6);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.5);
+    --primary: #818cf8;
+    --primary-dark: #6366f1;
+    --primary-light: #a5b4fc;
+    --danger-light: rgba(239, 68, 68, 0.2);
+    --warning-light: rgba(245, 158, 11, 0.2);
+    --success-light: rgba(34, 197, 94, 0.2);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7), 0 4px 6px -2px rgba(0, 0, 0, 0.6);
 }
 
-/* System theme - uses prefers-color-scheme */
+/* System theme - uses prefers-color-scheme, clearly distinct from dark */
 html[data-theme="system"] {
-    --bg: var(--system-bg, #f8fafc);
-    --bg-card: var(--system-bg-card, #ffffff);
-    --text: var(--system-text, #1e293b);
-    --text-secondary: var(--system-text-secondary, #64748b);
-    --text-muted: var(--system-text-muted, #94a3b8);
-    --border: var(--system-border, #e2e8f0);
-    --sidebar-bg: var(--system-sidebar-bg, #1e293b);
-    --sidebar-text: var(--system-sidebar-text, #cbd5e1);
-    --danger-light: var(--system-danger-light, #fecaca);
-    --warning-light: var(--system-warning-light, #fef3c7);
-    --success-light: var(--system-success-light, #dcfce7);
-    --shadow: var(--system-shadow, 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06));
-    --shadow-lg: var(--system-shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05));
+    --bg: var(--sys-bg, #f8fafc);
+    --bg-card: var(--sys-bg-card, #ffffff);
+    --text: var(--sys-text, #1e293b);
+    --text-secondary: var(--sys-text-sec, #64748b);
+    --text-muted: var(--sys-text-mut, #94a3b8);
+    --border: var(--sys-border, #e2e8f0);
+    --sidebar-bg: var(--sys-sidebar, #1e293b);
+    --sidebar-text: var(--sys-sidebar-text, #cbd5e1);
+    --primary: var(--sys-primary, #6366f1);
+    --primary-dark: var(--sys-primary-dark, #4f46e5);
+    --primary-light: var(--sys-primary-light, #818cf8);
+    --danger-light: var(--sys-danger, #fecaca);
+    --warning-light: var(--sys-warning, #fef3c7);
+    --success-light: var(--sys-success, #dcfce7);
+    --shadow: var(--sys-shadow, 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06));
+    --shadow-lg: var(--sys-shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05));
 }
 
+/* System light mode */
 html[data-theme="system"]:not([data-system-dark]) {
-    --system-bg: #f8fafc;
-    --system-bg-card: #ffffff;
-    --system-text: #1e293b;
-    --system-text-secondary: #64748b;
-    --system-text-muted: #94a3b8;
-    --system-border: #e2e8f0;
-    --system-sidebar-bg: #1e293b;
-    --system-sidebar-text: #cbd5e1;
-    --system-danger-light: #fecaca;
-    --system-warning-light: #fef3c7;
-    --system-success-light: #dcfce7;
-    --system-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
-    --system-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    --sys-bg: #f8fafc;
+    --sys-bg-card: #ffffff;
+    --sys-text: #1e293b;
+    --sys-text-sec: #64748b;
+    --sys-text-mut: #94a3b8;
+    --sys-border: #e2e8f0;
+    --sys-sidebar: #1e293b;
+    --sys-sidebar-text: #cbd5e1;
+    --sys-primary: #6366f1;
+    --sys-primary-dark: #4f46e5;
+    --sys-primary-light: #818cf8;
+    --sys-danger: #fecaca;
+    --sys-warning: #fef3c7;
+    --sys-success: #dcfce7;
+    --sys-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+    --sys-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
 }
 
+/* System dark mode - distinct from pure dark theme */
 html[data-theme="system"][data-system-dark] {
-    --system-bg: #0b1220;
-    --system-bg-card: #141d2e;
-    --system-text: #e2e8f0;
-    --system-text-secondary: #94a3b8;
-    --system-text-muted: #64748b;
-    --system-border: #273449;
-    --system-sidebar-bg: #0f172a;
-    --system-sidebar-text: #94a3b8;
-    --system-danger-light: rgba(239, 68, 68, 0.18);
-    --system-warning-light: rgba(245, 158, 11, 0.18);
-    --system-success-light: rgba(34, 197, 94, 0.18);
-    --system-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.6);
-    --system-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.5);
+    --sys-bg: #1a1f2e;
+    --sys-bg-card: #252d3f;
+    --sys-text: #c9d1d9;
+    --sys-text-sec: #8b949e;
+    --sys-text-mut: #6e7681;
+    --sys-border: #30363d;
+    --sys-sidebar: #0d1117;
+    --sys-sidebar-text: #8b949e;
+    --sys-primary: #58a6ff;
+    --sys-primary-dark: #388bfd;
+    --sys-primary-light: #79c0ff;
+    --sys-danger: rgba(255, 110, 64, 0.2);
+    --sys-warning: rgba(255, 193, 7, 0.2);
+    --sys-success: rgba(63, 185, 80, 0.2);
+    --sys-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.5);
+    --sys-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
 }
 
-html[data-theme="dark"] body {
+/* Ocean theme - calm blues and teals */
+html[data-theme="ocean"] {
+    --bg: #e8f4f8;
+    --bg-card: #ffffff;
+    --text: #0c4a6e;
+    --text-secondary: #4889a6;
+    --text-muted: #7ba7c2;
+    --border: #b8d4e3;
+    --sidebar-bg: #0c4a6e;
+    --sidebar-text: #a8d5e5;
+    --primary: #0891b2;
+    --primary-dark: #0e7490;
+    --primary-light: #22d3ee;
+    --danger-light: #fecaca;
+    --warning-light: #fef3c7;
+    --success-light: #dcfce7;
+    --shadow: 0 1px 3px rgba(12, 74, 110, 0.12), 0 1px 2px rgba(12, 74, 110, 0.08);
+    --shadow-lg: 0 10px 15px -3px rgba(12, 74, 110, 0.15), 0 4px 6px -2px rgba(12, 74, 110, 0.1);
+}
+
+/* Sunset theme - warm oranges and pinks */
+html[data-theme="sunset"] {
+    --bg: #fef2f2;
+    --bg-card: #ffffff;
+    --text: #7f1d1d;
+    --text-secondary: #b45309;
+    --text-muted: #d97706;
+    --border: #fde4d0;
+    --sidebar-bg: #7f1d1d;
+    --sidebar-text: #fed7aa;
+    --primary: #ea580c;
+    --primary-dark: #c2410c;
+    --primary-light: #fb923c;
+    --danger-light: #fecaca;
+    --warning-light: #fef3c7;
+    --success-light: #dcfce7;
+    --shadow: 0 1px 3px rgba(127, 29, 29, 0.12), 0 1px 2px rgba(127, 29, 29, 0.08);
+    --shadow-lg: 0 10px 15px -3px rgba(127, 29, 29, 0.15), 0 4px 6px -2px rgba(127, 29, 29, 0.1);
+}
+
+/* Forest theme - earthy greens and browns */
+html[data-theme="forest"] {
+    --bg: #f0fdf4;
+    --bg-card: #ffffff;
+    --text: #14532d;
+    --text-secondary: #4d7c4d;
+    --text-muted: #74a674;
+    --border: #b8d4b8;
+    --sidebar-bg: #14532d;
+    --sidebar-text: #a8d5a2;
+    --primary: #16a34a;
+    --primary-dark: #15803d;
+    --primary-light: #4ade80;
+    --danger-light: #fecaca;
+    --warning-light: #fef3c7;
+    --success-light: #dcfce7;
+    --shadow: 0 1px 3px rgba(20, 83, 45, 0.12), 0 1px 2px rgba(20, 83, 45, 0.08);
+    --shadow-lg: 0 10px 15px -3px rgba(20, 83, 45, 0.15), 0 4px 6px -2px rgba(20, 83, 45, 0.1);
+}
+
+/* Shared overrides for every non-plain-light theme family. Both System modes
+   resolve through the --sys-* variables, so the same var()-based values stay
+   correct whether the OS is light or dark. */
+html[data-theme="dark"] body,
+html[data-theme="system"] body,
+html[data-theme="ocean"] body,
+html[data-theme="sunset"] body,
+html[data-theme="forest"] body {
     background: var(--bg);
     color: var(--text);
 }
 
-html[data-theme="dark"] .sidebar {
+html[data-theme="dark"] .sidebar,
+html[data-theme="system"] .sidebar,
+html[data-theme="ocean"] .sidebar,
+html[data-theme="sunset"] .sidebar,
+html[data-theme="forest"] .sidebar {
     background: var(--sidebar-bg);
     color: var(--sidebar-text);
     border-right: 1px solid var(--border);
@@ -1137,40 +1280,124 @@ html[data-theme="dark"] .sidebar {
 html[data-theme="dark"] .form-group input,
 html[data-theme="dark"] .form-group select,
 html[data-theme="dark"] .form-group textarea,
-html[data-theme="dark"] .input-group input {
+html[data-theme="dark"] .input-group input,
+html[data-theme="system"] .form-group input,
+html[data-theme="system"] .form-group select,
+html[data-theme="system"] .form-group textarea,
+html[data-theme="system"] .input-group input,
+html[data-theme="ocean"] .form-group input,
+html[data-theme="ocean"] .form-group select,
+html[data-theme="ocean"] .form-group textarea,
+html[data-theme="ocean"] .input-group input,
+html[data-theme="sunset"] .form-group input,
+html[data-theme="sunset"] .form-group select,
+html[data-theme="sunset"] .form-group textarea,
+html[data-theme="sunset"] .input-group input,
+html[data-theme="forest"] .form-group input,
+html[data-theme="forest"] .form-group select,
+html[data-theme="forest"] .form-group textarea,
+html[data-theme="forest"] .input-group input {
     background: var(--bg-card);
     color: var(--text);
     border-color: var(--border);
 }
 
-html[data-theme="dark"] .form-group select option {
+html[data-theme="dark"] .form-group select option,
+html[data-theme="system"] .form-group select option,
+html[data-theme="ocean"] .form-group select option,
+html[data-theme="sunset"] .form-group select option,
+html[data-theme="forest"] .form-group select option {
     background: var(--bg-card);
     color: var(--text);
 }
 
-html[data-theme="dark"] .btn-social {
+html[data-theme="dark"] .btn-social,
+html[data-theme="system"] .btn-social,
+html[data-theme="ocean"] .btn-social,
+html[data-theme="sunset"] .btn-social,
+html[data-theme="forest"] .btn-social {
     background: var(--bg-card);
     color: var(--text);
     border-color: var(--border);
 }
 
-html[data-theme="dark"] .auth-body {
-    background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+html[data-theme="dark"] .auth-body,
+html[data-theme="system"][data-system-dark] .auth-body {
+    background: linear-gradient(135deg, #060a12 0%, #020617 100%);
 }
 
-html[data-theme="dark"] .data-table tbody tr:hover {
+html[data-theme="system"]:not([data-system-dark]) .auth-body,
+html[data-theme="light"] .auth-body {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+html[data-theme="ocean"] .auth-body {
+    background: linear-gradient(135deg, #0c4a6e 0%, #082f49 100%);
+}
+
+html[data-theme="sunset"] .auth-body {
+    background: linear-gradient(135deg, #7f1d1d 0%, #431407 100%);
+}
+
+html[data-theme="forest"] .auth-body {
+    background: linear-gradient(135deg, #14532d 0%, #052e16 100%);
+}
+
+html[data-theme="dark"] .data-table tbody tr:hover,
+html[data-theme="system"] .data-table tbody tr:hover,
+html[data-theme="ocean"] .data-table tbody tr:hover,
+html[data-theme="sunset"] .data-table tbody tr:hover,
+html[data-theme="forest"] .data-table tbody tr:hover {
     background: var(--bg);
 }
 
 html[data-theme="dark"] .metric,
 html[data-theme="dark"] .bar-track,
-html[data-theme="dark"] .auth-tabs {
+html[data-theme="dark"] .auth-tabs,
+html[data-theme="system"] .metric,
+html[data-theme="system"] .bar-track,
+html[data-theme="system"] .auth-tabs,
+html[data-theme="ocean"] .metric,
+html[data-theme="ocean"] .bar-track,
+html[data-theme="ocean"] .auth-tabs,
+html[data-theme="sunset"] .metric,
+html[data-theme="sunset"] .bar-track,
+html[data-theme="sunset"] .auth-tabs,
+html[data-theme="forest"] .metric,
+html[data-theme="forest"] .bar-track,
+html[data-theme="forest"] .auth-tabs {
     background: var(--bg);
     border-color: var(--border);
 }
 
-html[data-theme="dark"] .strength-bar {
+html[data-theme="dark"] .strength-bar,
+html[data-theme="system"] .strength-bar,
+html[data-theme="ocean"] .strength-bar,
+html[data-theme="sunset"] .strength-bar,
+html[data-theme="forest"] .strength-bar {
     background: var(--border);
+}
+
+html[data-theme="dark"] .logout-btn,
+html[data-theme="dark"] .preview-btn,
+html[data-theme="system"] .logout-btn,
+html[data-theme="system"] .preview-btn,
+html[data-theme="ocean"] .logout-btn,
+html[data-theme="ocean"] .preview-btn,
+html[data-theme="sunset"] .logout-btn,
+html[data-theme="sunset"] .preview-btn,
+html[data-theme="forest"] .logout-btn,
+html[data-theme="forest"] .preview-btn {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+}
+
+html[data-theme="dark"] .user-name,
+html[data-theme="system"] .user-name,
+html[data-theme="ocean"] .user-name,
+html[data-theme="sunset"] .user-name,
+html[data-theme="forest"] .user-name {
+    color: #fff;
 }
 
 /* Light theme overrides - ensure consistency */
@@ -1180,13 +1407,19 @@ html[data-theme="light"] .sidebar {
     border-right: 1px solid var(--border);
 }
 
-html[data-theme="light"] .auth-body {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-}
-
 html[data-theme="light"] .card {
     background: var(--bg-card);
     border-color: var(--border);
+}
+
+html[data-theme="light"] .logout-btn,
+html[data-theme="light"] .preview-btn {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+}
+
+html[data-theme="light"] .user-name {
+    color: #fff;
 }
 
 /* ============================================
@@ -1415,4 +1648,119 @@ body {
 
 .text-muted {
     color: var(--text-muted);
+}
+
+/* ============================================
+   Google role selection modal
+   ============================================ */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-card {
+    position: relative;
+    width: min(440px, 100%);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+    color: var(--text);
+}
+
+.modal-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.modal-card h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+    color: var(--text);
+}
+
+.modal-sub {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.role-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.role-option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.role-option:hover {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.role-option input[type="radio"] {
+    accent-color: var(--primary);
+    flex: none;
+}
+
+.role-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.role-desc {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.role-error {
+    font-size: 0.85rem;
+    color: var(--danger);
+    margin: 0 0 0.75rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    margin-top: 0.25rem;
+}
+
+.modal-actions .btn {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
 }

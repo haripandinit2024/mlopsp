@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DROPpredict - Login</title>
+    <title>EduGuard - Login</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/favicon.svg">
+    <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="preconnect">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,6 +19,33 @@
             margin-top: 1.5rem;
             text-decoration: none;
         }
+        .live-pill {
+            display: inline-block;
+            padding: 6px 14px;
+            margin-top: 0.75rem;
+            border: 1px solid var(--border, #cfdbe8);
+            border-radius: 999px;
+            color: var(--text-muted, #56708d);
+            background: rgba(255, 255, 255, 0.5);
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        .live-pill::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            margin-right: 7px;
+            border-radius: 50%;
+            background: var(--success, #22c55e);
+            vertical-align: baseline;
+        }
+        .brand-tagline {
+            font-size: 0.86rem;
+            line-height: 1.5;
+            color: var(--text-muted, #56708d);
+        }
     </style>
 </head>
 <body class="auth-body">
@@ -24,10 +53,12 @@
         <div class="auth-card">
             <div class="auth-header">
                 <div class="auth-logo">
-                    <span class="logo-icon">&#x1F393;</span>
-                    <h1>DROPpredict</h1>
+                    <img src="/logo.svg" alt="EduGuard Logo" class="logo-img">
+                    <h1>EduGuard</h1>
                 </div>
-                <p class="auth-subtitle" data-i18n="brand.tagline">Student Risk Analytics Platform</p>
+                <p class="auth-subtitle brand-tagline">Student Risk Intelligence — live dashboard · real model output on the full 10,000-student roster</p>
+                <span class="live-pill">Live data</span>
+                <p class="auth-version">v2.0</p>
             </div>
 
             <!-- Tab Navigation -->
@@ -58,17 +89,36 @@
                     <span data-i18n="auth.or">or continue with</span>
                 </div>
                 <button type="button" class="btn btn-google btn-block" id="googleSignInBtn" onclick="handleGoogleSignIn()">
-                    <span>&#x1F310;</span> Continue with Google
+                    <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    Continue with Google
                 </button>
                 <div class="social-buttons">
                     <button type="button" class="btn btn-social" id="studentPortalBtn">
-                        <span>&#x1F464;</span> <span data-i18n="auth.studentPortal">Student Portal</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <span data-i18n="auth.studentPortal">Student Portal</span>
                     </button>
                     <button type="button" class="btn btn-social" id="facultyPortalBtn">
-                        <span>&#x1F468;&#x200D;&#x1F3EB;</span> <span data-i18n="auth.facultyPortal">Faculty Portal</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span data-i18n="auth.facultyPortal">Faculty Portal</span>
                     </button>
                     <button type="button" class="btn btn-social" id="adminPortalBtn">
-                        <span>&#x1F4E1;</span> <span data-i18n="auth.adminPortal">Administrator Portal</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <span data-i18n="auth.adminPortal">Administrator Portal</span>
                     </button>
                 </div>
             </form>
@@ -131,13 +181,23 @@
                     <span data-i18n="auth.or">or continue with</span>
                 </div>
                 <button type="button" class="btn btn-google btn-block" id="googleSignInBtnSignup" onclick="handleGoogleSignIn()">
-                    <span>&#x1F310;</span> Continue with Google
+                    <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    Continue with Google
                 </button>
             </form>
 
             <!-- Success Message -->
             <div class="auth-success hidden" id="authSuccess">
-                <div class="success-icon">&#x2714;</div>
+                <div class="success-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </div>
                 <h3 id="successTitle" data-i18n="auth.successTitle">Account Created!</h3>
                 <p id="successMessage">Your account has been created successfully.</p>
                 <button class="btn btn-primary" onclick="showForm('login')" data-i18n="auth.successLogin">Proceed to Login</button>
@@ -145,40 +205,69 @@
 
             <div class="auth-footer">
                 <p id="authFooterText">Don't have an account? <a href="/settings.html" onclick="showForm('signup'); return false;">Sign up</a></p>
+                <a class="preview-link" href="/preview">View student risk overview</a>
             </div>
         </div>
+    </div>
 
-        <!-- Preview Panel -->
-        <div class="auth-preview">
-            <div class="preview-content">
-                <h2>Student Dropout Risk Dashboard</h2>
-                <p>Predict and prevent student dropout with AI-powered analytics</p>
-                <div class="preview-features">
-                    <div class="preview-feature">
-                        <span class="feature-icon">&#x1F4CA;</span>
-                        <span>Real-time Risk Assessment</span>
-                    </div>
-                    <div class="preview-feature">
-                        <span class="feature-icon">&#x1F468;&#x200D;&#x1F3EB;</span>
-                        <span>Faculty Monitoring Tools</span>
-                    </div>
-                    <div class="preview-feature">
-                        <span class="feature-icon">&#x1F393;</span>
-                        <span>Personalized Recommendations</span>
-                    </div>
-                    <div class="preview-feature">
-                        <span class="feature-icon">&#x1F4E1;</span>
-                        <span>Institution-wide Analytics</span>
-                    </div>
-                </div>
-                <a class="btn btn-primary preview-link" href="/preview" target="_blank" rel="noopener">Open Live Dashboard Preview &rarr;</a>
+    <!-- Google role selection modal (shown after a successful Google sign-in) -->
+    <div class="modal-overlay hidden" id="googleRoleModal">
+        <div class="modal-card">
+            <button type="button" class="modal-close" id="googleRoleClose" aria-label="Close">&times;</button>
+            <h3 data-i18n="auth.googleRoleTitle">Choose your role</h3>
+            <p class="modal-sub" id="googleRoleAccount"></p>
+            <div class="role-options" id="googleRoleOptions">
+                <label class="role-option" data-role="student">
+                    <input type="radio" name="googleRole" value="student" checked>
+                    <span class="role-name" data-i18n="auth.roleStudent">Student</span>
+                    <span class="role-desc" data-i18n="auth.roleStudentDesc">No invite code needed</span>
+                </label>
+                <label class="role-option" data-role="faculty">
+                    <input type="radio" name="googleRole" value="faculty">
+                    <span class="role-name" data-i18n="auth.roleFaculty">Faculty</span>
+                    <span class="role-desc" data-i18n="auth.roleFacultyDesc">Invite code required</span>
+                </label>
+                <label class="role-option" data-role="admin">
+                    <input type="radio" name="googleRole" value="admin">
+                    <span class="role-name" data-i18n="auth.roleAdmin">Administrator</span>
+                    <span class="role-desc" data-i18n="auth.roleAdminDesc">Invite code required</span>
+                </label>
+            </div>
+            <div class="form-group hidden" id="googleRoleInviteGroup">
+                <label for="googleRoleInvite" data-i18n="auth.inviteCode">Invite Code</label>
+                <input type="password" id="googleRoleInvite" placeholder="Required for faculty / administrator">
+            </div>
+            <div class="form-group hidden" id="googleRoleStudentIdGroup">
+                <label for="googleRoleStudentId" data-i18n="auth.studentId">Student ID</label>
+                <input type="number" id="googleRoleStudentId" min="1" max="10000" placeholder="Required - your student ID, e.g. 42">
+            </div>
+            <p class="role-error hidden" id="googleRoleError"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn" id="googleRoleCancel" data-i18n="auth.googleRoleCancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="googleRoleConfirm" data-i18n="auth.googleRoleConfirm">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invite-code prompt for the Faculty / Administrator portal buttons -->
+    <div class="modal-overlay hidden" id="portalInviteModal">
+        <div class="modal-card">
+            <button type="button" class="modal-close" id="portalInviteClose" aria-label="Close">&times;</button>
+            <h3 id="portalInviteTitle">Faculty access</h3>
+            <p class="modal-sub" id="portalInviteSub">Enter your faculty invite code to continue.</p>
+            <div class="form-group">
+                <label for="portalInviteInput" data-i18n="auth.inviteCode">Invite Code</label>
+                <input type="password" id="portalInviteInput" placeholder="Required for faculty / administrator">
+            </div>
+            <p class="role-error hidden" id="portalInviteError"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn" id="portalInviteCancel" data-i18n="auth.googleRoleCancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="portalInviteConfirm" data-i18n="auth.googleRoleConfirm">Continue</button>
             </div>
         </div>
     </div>
 
     <script src="/js/auth.js"></script>
-    <script src="/js/controls.js"></script>
-
     <!--
       Firebase Authentication + Cloud Firestore only.
       firebase-config.js is generated per environment and gitignored:

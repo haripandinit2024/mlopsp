@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DROPpredict - Dashboard</title>
+    <title>EduGuard - Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/favicon.svg">
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="/js/theme.js"></script>
@@ -46,6 +48,11 @@
         .preview-btn:hover {
             background: var(--primary, #22c7d7);
         }
+        .student-col {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
     </style>
 </head>
 <body>
@@ -54,10 +61,11 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <span class="logo-icon">&#x1F393;</span>
-                    <h1>DROPpredict</h1>
+                    <img src="/logo.svg" alt="EduGuard Logo" class="logo-img">
+                    <h1>EduGuard</h1>
                 </div>
                 <div class="subtitle">Student Risk Analytics Platform</div>
+                <div class="version-badge">v2.0</div>
             </div>
 
             <ul class="nav-menu" id="navMenu"></ul>
@@ -85,6 +93,22 @@
             <!-- Student View -->
             <section class="view" id="studentView">
                 <div class="card-grid">
+                    <div class="student-col">
+                    <div class="card" id="studentOverviewCard">
+                        <h3 data-i18n="stu.overview">My Risk Overview</h3>
+                        <p data-i18n="stu.overviewSub">Your latest risk assessment from the live model.</p>
+                        <div class="overview-row">
+                            <div class="risk-gauge" data-tier="Low">
+                                <div class="gauge-value" id="studentOverviewRisk">--</div>
+                                <div class="gauge-label" id="studentOverviewTier">--</div>
+                            </div>
+                            <div class="overview-chart">
+                                <div id="studentOverviewChart"></div>
+                            </div>
+                        </div>
+                        <div class="risk-details" id="studentOverviewDetails" style="margin-top: 0.5rem;"></div>
+                        <div class="recommendations" id="studentOverviewRecs"></div>
+                    </div>
                     <div class="card">
                         <h3 data-i18n="stu.quick">Quick Student Lookup</h3>
                         <p data-i18n="stu.quickSub">Enter a student ID (1-10000) to check their risk score.</p>
@@ -94,58 +118,67 @@
                         </div>
                     </div>
 
+                    <!-- Manual Risk Prediction Card (RESTORED) -->
                     <div class="card">
                         <h3 data-i18n="stu.manual">Manual Risk Prediction</h3>
                         <p data-i18n="stu.manualSub">Enter the student profile below for a live prediction.</p>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="inputGPA" data-i18n="stu.gpa">GPA</label>
-                                <input type="number" id="inputGPA" step="0.01" min="0" max="4" placeholder="e.g. 2.5">
+                        <form id="manualPredictForm" onsubmit="return predictCustom(event)">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="manualGpa" data-i18n="stu.gpa">CGPA</label>
+                                    <input type="number" id="manualGpa" step="0.01" min="0" max="10" placeholder="0.00 - 10.00" data-i18n-ph="stu.gpaPh" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="manualAttendance" data-i18n="stu.attendance">Attendance Rate (%)</label>
+                                    <input type="number" id="manualAttendance" step="0.1" min="0" max="100" placeholder="0 - 100" data-i18n-ph="stu.attPh" required>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="inputAttendance" data-i18n="stu.attendance">Attendance Rate (%)</label>
-                                <input type="number" id="inputAttendance" min="0" max="100" placeholder="e.g. 82">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="manualStress" data-i18n="stu.stress">Stress Index (1-10)</label>
+                                    <input type="number" id="manualStress" step="0.1" min="1" max="10" placeholder="1.0 - 10.0" data-i18n-ph="stu.stressPh" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="manualStudy" data-i18n="stu.study">Study Hours / Day</label>
+                                    <input type="number" id="manualStudy" step="0.5" min="0" max="24" placeholder="0 - 24" data-i18n-ph="stu.studyPh" required>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="inputStress" data-i18n="stu.stress">Stress Index (1-10)</label>
-                                <input type="number" id="inputStress" min="1" max="10" placeholder="e.g. 6">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="manualSemGpa" data-i18n="stu.semGpa">Semester CGPA</label>
+                                    <input type="number" id="manualSemGpa" step="0.01" min="0" max="10" placeholder="0.00 - 10.00" data-i18n-ph="stu.semGpaPh">
+                                </div>
+                                <div class="form-group">
+                                    <label for="manualDelay" data-i18n="stu.delay">Assignment Delay (days)</label>
+                                    <input type="number" id="manualDelay" step="1" min="0" max="365" placeholder="0 - 365" data-i18n-ph="stu.delayPh">
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="inputStudyHours" data-i18n="stu.study">Study Hours / Day</label>
-                                <input type="number" id="inputStudyHours" step="0.5" placeholder="e.g. 4">
+                            <div class="input-group">
+                                <button type="submit" class="btn btn-primary" data-i18n="stu.predict">Predict Risk</button>
                             </div>
-                            <div class="form-group">
-                                <label for="inputSemesterGPA" data-i18n="stu.semGpa">Semester GPA</label>
-                                <input type="number" id="inputSemesterGPA" step="0.01" min="0" max="4" placeholder="e.g. 2.3">
-                            </div>
-                            <div class="form-group">
-                                <label for="inputDelay" data-i18n="stu.delay">Assignment Delay (days)</label>
-                                <input type="number" id="inputDelay" min="0" placeholder="e.g. 2">
-                            </div>
-                        </div>
-                        <div class="input-group">
-                            <button class="btn btn-primary" onclick="predictCustom()" data-i18n="stu.predict">Predict Risk</button>
-                        </div>
+                        </form>
                     </div>
-                </div>
 
-                <!-- Result -->
-                <div class="card result-card hidden" id="studentResult">
-                    <div class="result-header">
-                        <h3 data-i18n="stu.result">Prediction Result</h3>
-                        <button class="btn btn-close" onclick="hideResult('studentResult')">&times;</button>
+                    <!-- Result (shown right under the lookup, no trailing blank space) -->
+                    <div class="card result-card hidden" id="studentResult">
+                        <div class="result-header">
+                            <h3 data-i18n="stu.result">Prediction Result</h3>
+                            <button class="btn btn-close" onclick="hideResult('studentResult')">&times;</button>
+                        </div>
+                        <div class="risk-gauge" data-tier="Low">
+                            <div class="gauge-value" id="studentRiskValue">--</div>
+                            <div class="gauge-label" id="studentRiskTier">--</div>
+                        </div>
+                        <div class="risk-bar-container">
+                            <div class="risk-bar low" id="studentRiskBar" style="width:0%"></div>
+                        </div>
+                        <div class="risk-details" id="studentDetails"></div>
+                        <div id="studentProfileChart" class="profile-chart-wrap"></div>
+                        <div class="recommendations">
+                            <h4 data-i18n="stu.recs">Recommendations</h4>
+                            <ul id="studentRecList"></ul>
+                        </div>
                     </div>
-                    <div class="risk-gauge" data-tier="Low">
-                        <div class="gauge-value" id="studentRiskValue">--</div>
-                        <div class="gauge-label" id="studentRiskTier">--</div>
-                    </div>
-                    <div class="risk-bar-container">
-                        <div class="risk-bar low" id="studentRiskBar" style="width:0%"></div>
-                    </div>
-                    <div class="risk-details" id="studentDetails"></div>
-                    <div class="recommendations">
-                        <h4 data-i18n="stu.recs">Recommendations</h4>
-                        <ul id="studentRecList"></ul>
                     </div>
                 </div>
             </section>
@@ -183,6 +216,16 @@
                         <div class="stat-card success"><div class="stat-value" id="facultyLow">0</div><div class="stat-label" data-i18n="stat.low">Low Risk</div></div>
                         <div class="stat-card highlight"><div class="stat-value" id="facultyTotal">0</div><div class="stat-label" data-i18n="stat.total">Total At-Risk</div></div>
                     </div>
+                    <div class="card-grid" style="margin-top: 1.5rem;">
+                        <div class="card">
+                            <h3 data-i18n="fac.tierChart">At-Risk Distribution</h3>
+                            <div id="facultyTierChart"></div>
+                        </div>
+                        <div class="card">
+                            <h3 data-i18n="fac.histChart">Watchlist Risk Profile</h3>
+                            <div id="facultyHistChart"></div>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
@@ -214,6 +257,10 @@
                         <h3 data-i18n="adm.yearChart">Average Risk by Year</h3>
                         <div id="yearChart"></div>
                     </div>
+                </div>
+                <div class="card" style="margin-top: 1.5rem;">
+                    <h3 data-i18n="adm.tierChart">Risk Tier Breakdown</h3>
+                    <div id="adminTierChart"></div>
                 </div>
             </section>
 
@@ -322,6 +369,9 @@
                             <button type="button" data-theme-opt="light" data-i18n="set.light">Light</button>
                             <button type="button" data-theme-opt="dark" data-i18n="set.dark">Dark</button>
                             <button type="button" data-theme-opt="system" data-i18n="set.system">System</button>
+                            <button type="button" data-theme-opt="ocean" data-i18n="set.ocean">Ocean</button>
+                            <button type="button" data-theme-opt="sunset" data-i18n="set.sunset">Sunset</button>
+                            <button type="button" data-theme-opt="forest" data-i18n="set.forest">Forest</button>
                         </div>
                     </div>
 

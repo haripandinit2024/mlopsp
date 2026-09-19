@@ -1,7 +1,14 @@
-/* Theme system: light / dark / system, persisted in localStorage. */
+/* Theme system: light / dark / system / ocean / sunset / forest, persisted in localStorage. */
 (function () {
-  var KEY = 'drop-theme';
-  var ICONS = { light: '\u2600\ufe0f', dark: '\ud83c\udf19', system: '\ud83d\udda5\ufe0f' };
+  var KEY = 'eduguard-theme';
+  var ICONS = { 
+    light: '\u2600\ufe0f', 
+    dark: '\ud83c\udf19', 
+    system: '\ud83d\udda5\ufe0f',
+    ocean: '\ud83d\udca7',
+    sunset: '\ud83c\udf19\ud83c\udf08',
+    forest: '\ud83c\udf3f'
+  };
 
   function getPref() {
     try {
@@ -24,11 +31,18 @@
   }
 
   function apply() {
+    var pref = getPref();
     var theme = effective();
-    document.documentElement.setAttribute('data-theme', theme);
-    // Set system dark attribute for CSS
-    if (theme === 'dark' && getPref() === 'system') {
-      document.documentElement.setAttribute('data-system-dark', 'true');
+    document.documentElement.setAttribute('data-theme', pref);
+    document.documentElement.setAttribute('data-resolved-theme', theme);
+    // For the "system" preference, surface the OS choice so CSS can differ
+    // System-dark from pure Dark while still following prefers-color-scheme.
+    if (pref === 'system') {
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-system-dark', 'true');
+      } else {
+        document.documentElement.removeAttribute('data-system-dark');
+      }
     } else {
       document.documentElement.removeAttribute('data-system-dark');
     }
@@ -37,12 +51,19 @@
   function syncUI() {
     var theme = effective();
     var btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = ICONS[theme];
+    if (btn) {
+      btn.textContent = (ICONS[theme] || '') + ' ' + theme.charAt(0).toUpperCase() + theme.slice(1);
+    }
     document.querySelectorAll('#themeMenu [data-theme-opt]').forEach(function (b) {
       var active = getPref() === b.getAttribute('data-theme-opt');
       b.classList.toggle('active', active);
-      if (active) b.style.fontWeight = '600';
-      else b.style.fontWeight = '';
+      if (active) {
+        b.style.fontWeight = '600';
+        b.style.boxShadow = '0 0 0 2px var(--primary)';
+      } else {
+        b.style.fontWeight = '';
+        b.style.boxShadow = '';
+      }
     });
   }
 
@@ -55,7 +76,8 @@
       document.dispatchEvent(new CustomEvent('theme:change', { detail: { theme: effective() } }));
     },
     current: effective,
-    effective: effective
+    effective: effective,
+    icons: ICONS
   };
 
   apply();

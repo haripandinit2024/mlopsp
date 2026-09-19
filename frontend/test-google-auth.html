@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Auth Test - EduGuard</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-error { color: #ff4444; }
+        .log-warn { color: #ffaa00; }
+        .log-info { color: #00aaff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Google Authentication Test - EduGuard</h1>
+    
+    <div class="test-section">
+        <h2>1. Firebase Configuration</h2>
+        <div id="firebase-config-status" class="status status-info">Checking...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Firebase App Initialization</h2>
+        <div id="firebase-init-status" class="status status-info">Checking...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Authentication</h2>
+        <button id="test-google-btn" class="btn-primary" disabled>Test Google Sign-In</button>
+        <button id="test-signout-btn" class="btn-danger" disabled>Sign Out</button>
+        <div id="auth-status" class="status status-info" style="margin-top: 10px;">Waiting...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Console Log</h2>
+        <div id="console-log" class="log"></div>
+    </div>
+
+    <script src="/js/firebase-config.js"></script>
+    <script type="module">
+        // Override console to capture logs
+        const logContainer = document.getElementById('console-log');
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        function captureLog(level, ...args) {
+            const div = document.createElement('div');
+            div.textContent = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            if (level === 'error') div.className = 'log-error';
+            else if (level === 'warn') div.className = 'log-warn';
+            else if (level === 'info') div.className = 'log-info';
+            
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            originalConsole[level](...args);
+        }
+
+        console.log = (...args) => captureLog('log', ...args);
+        console.error = (...args) => captureLog('error', ...args);
+        console.warn = (...args) => captureLog('warn', ...args);
+        console.info = (...args) => captureLog('info', ...args);
+
+        // Test Firebase configuration
+        function testConfig() {
+            const configStatus = document.getElementById('firebase-config-status');
+            
+            if (typeof window.FIREBASE_CONFIG === 'undefined') {
+                configStatus.className = 'status status-error';
+                configStatus.textContent = '❌ FIREBASE_CONFIG is not defined';
+                return false;
+            }
+            
+            const required = ['apiKey', 'authDomain', 'projectId', 'appId'];
+            const missing = required.filter(key => !window.FIREBASE_CONFIG[key]);
+            
+            if (missing.length > 0) {
+                configStatus.className = 'status status-error';
+                configStatus.textContent = `❌ Missing config keys: ${missing.join(', ')}`;
+                return false;
+            }
+            
+            configStatus.className = 'status status-success';
+            configStatus.textContent = '✅ Firebase config is complete';
+            console.log('Firebase config:', window.FIREBASE_CONFIG);
+            return true;
+        }
+
+        // Test Firebase initialization
+        async function testInit() {
+            const initStatus = document.getElementById('firebase-init-status');
+            
+            try {
+                const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js');
+                const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
+                
+                if (getApps().length === 0) {
+                    initializeApp(window.FIREBASE_CONFIG);
+                }
+                
+                const app = getApp();
+                const auth = getAuth(app);
+                
+                initStatus.className = 'status status-success';
+                initStatus.textContent = '✅ Firebase app and auth initialized';
+                console.log('Firebase app:', app.name, 'Auth:', auth);
+                return auth;
+            } catch (error) {
+                initStatus.className = 'status status-error';
+                initStatus.textContent = `❌ Initialization failed: ${error.message}`;
+                console.error('Init error:', error);
+                return null;
+            }
+        }
+
+        // Test Google Sign-In
+        async function testGoogleSignIn(auth) {
+            const authStatus = document.getElementById('auth-status');
+            const googleBtn = document.getElementById('test-google-btn');
+            const signoutBtn = document.getElementById('test-signout-btn');
+            
+            const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } = 
+                await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
+            
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            
+            try {
+                authStatus.textContent = '⏳ Opening Google sign-in popup...';
+                googleBtn.disabled = true;
+                
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+                
+                authStatus.className = 'status status-success';
+                authStatus.innerHTML = `✅ Signed in as: ${user.email}`;
+                console.log('Signed in user:', user);
+                
+                googleBtn.disabled = true;
+                signoutBtn.disabled = false;
+                
+                return user;
+            } catch (error) {
+                console.error('Google sign-in error:', error);
+                
+                if (error.code === 'auth/popup-closed-by-user') {
+                    authStatus.className = 'status status-info';
+                    authStatus.textContent = 'ℹ️ Popup was closed by user';
+                } else if (error.code === 'auth/unauthorized-domain') {
+                    authStatus.className = 'status status-error';
+                    authStatus.textContent = '❌ Domain not authorized. Add localhost to Firebase console.';
+                } else {
+                    authStatus.className = 'status status-error';
+                    authStatus.textContent = `❌ Error: ${error.message}`;
+                }
+                
+                googleBtn.disabled = false;
+                return null;
+            }
+        }
+
+        // Sign out
+        async function testSignOut(auth) {
+            const { signOut } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
+            const authStatus = document.getElementById('auth-status');
+            const googleBtn = document.getElementById('test-google-btn');
+            const signoutBtn = document.getElementById('test-signout-btn');
+            
+            try {
+                await signOut(auth);
+                authStatus.className = 'status status-info';
+                authStatus.textContent = '👋 Signed out';
+                googleBtn.disabled = false;
+                signoutBtn.disabled = true;
+                console.log('User signed out');
+            } catch (error) {
+                console.error('Sign out error:', error);
+                authStatus.className = 'status status-error';
+                authStatus.textContent = `❌ Sign out failed: ${error.message}`;
+            }
+        }
+
+        // Initialize
+        async function init() {
+            console.log('🚀 Starting Google Auth Test...');
+            
+            const configOk = testConfig();
+            if (!configOk) {
+                document.getElementById('firebase-init-status').textContent = '⏭️ Skipping (config invalid)';
+                document.getElementById('auth-status').textContent = '❌ Cannot test - Firebase not configured';
+                return;
+            }
+            
+            const auth = await testInit();
+            if (!auth) {
+                document.getElementById('auth-status').textContent = '❌ Cannot test - Firebase init failed';
+                return;
+            }
+            
+            document.getElementById('test-google-btn').onclick = () => testGoogleSignIn(auth);
+            document.getElementById('test-signout-btn').onclick = () => testSignOut(auth);
+            
+            console.log('✅ Test page ready');
+        }
+
+        init();
+    </script>
+</body>
+</html>

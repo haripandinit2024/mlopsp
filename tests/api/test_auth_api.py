@@ -165,6 +165,35 @@ class TestSessionLifecycle(AppTestCase):
     def test_me_requires_session(self):
         self.assertEqual(self.client.get("/api/auth/me").status_code, 401)
 
+    def test_unlinked_student_me_requires_linked_record(self):
+        self.login_as("student", email="unlinked@example.com")
+        res = self.client.get("/api/students/me")
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("not linked", res.get_json()["error"])
+
+    def test_linked_student_me_returns_own_record(self):
+        self.login_as("student", email="linked-me@example.com", student_id=7)
+        res = self.client.get("/api/students/me")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()["student"]["student_id"], 7)
+
+    def test_link_student_requires_authentication(self):
+        res = self.client.post(
+            "/api/auth/link-student",
+            json={"student_id": 7},
+        )
+        self.assertEqual(res.status_code, 401)
+
+    def test_link_student_rejects_unknown_student_id(self):
+        # In legacy backend mode the endpoint is gated off (Firebase only), but
+        # it must validate shape before it reports the backend is unavailable.
+        self.login_as("student", email="linker@example.com")
+        res = self.client.post(
+            "/api/auth/link-student",
+            json={"student_id": 999999},
+        )
+        self.assertIn(res.status_code, (400, 403, 409))
+
     def test_logout_clears_session(self):
         self.login_as("student")
         self.assertEqual(self.client.get("/api/auth/me").status_code, 200)
@@ -187,10 +216,11 @@ class TestSessionLifecycle(AppTestCase):
 
 
 class TestProtectedPages(AppTestCase):
-    def test_root_redirects_anonymous_to_login(self):
+    def test_root_serves_the_public_preview_for_anonymous(self):
+        # The site root is the public, standalone dashboard preview; the login
+        # page stays at /login and the authenticated dashboard at /dashboard.
         res = self.client.get("/")
-        self.assertEqual(res.status_code, 302)
-        self.assertIn("/login", res.headers["Location"])
+        self.assertEqual(res.status_code, 200)
 
     def test_dashboard_redirects_anonymous_to_login(self):
         res = self.client.get("/dashboard")
@@ -203,6 +233,23 @@ class TestProtectedPages(AppTestCase):
 
     def test_login_page_is_public(self):
         self.assertEqual(self.client.get("/login").status_code, 200)
+
+    def test_role_query_lets_authenticated_user_reach_login_page(self):
+        # From the public preview, a user picks Faculty/Admin and is sent to
+        # /login?role=<role>#signup. The route must serve the login page (not
+        # bounce to the current role's dashboard) and drop the old session so
+        # the handoff is applied on this page instead of silently staying on
+        # the default student dashboard.
+        self.login_as("student")
+        res = self.client.get("/login?role=faculty")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.client.get("/api/auth/me").status_code, 401)
+
+    def test_login_page_still_redirects_authenticated_users_without_role(self):
+        self.login_as("student")
+        res = self.client.get("/login")
+        self.assertEqual(res.status_code, 302)
+        self.assertIn("/dashboard", res.headers["Location"])
 
 
 if __name__ == "__main__":

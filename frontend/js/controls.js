@@ -14,6 +14,9 @@
       '      <button type="button" data-theme-opt="light">&#9728;&#65039; Light</button>' +
       '      <button type="button" data-theme-opt="dark">&#127769; Dark</button>' +
       '      <button type="button" data-theme-opt="system">&#128421;&#65039; System</button>' +
+      '      <button type="button" data-theme-opt="ocean">&#127767; Ocean</button>' +
+      '      <button type="button" data-theme-opt="sunset">&#127768; Sunset</button>' +
+      '      <button type="button" data-theme-opt="forest">&#127767; Forest</button>' +
       '    </div>' +
       '  </div>' +
       '  <div class="set-section">' +
@@ -47,14 +50,17 @@
       });
     });
 
+    function themeLabel(opt) {
+      var icon = (window.Theme && window.Theme.icons && window.Theme.icons[opt]) || '';
+      var txt = window.I18N.t ? window.I18N.t('set.' + opt) : opt;
+      return (icon ? icon + ' ' : '') + txt;
+    }
+
     function syncTheme() {
       document.querySelectorAll('#themeMenu [data-theme-opt]').forEach(function (b) {
         var opt = b.getAttribute('data-theme-opt');
-        var active = window.Theme && window.Theme.get() === opt;
-        b.classList.toggle('active', active);
-        if (active && window.I18N.t) {
-          b.textContent = b.dataset.themeLabel || window.I18N.t('set.' + opt);
-        }
+        b.textContent = themeLabel(opt);
+        b.classList.toggle('active', window.Theme && window.Theme.get() === opt);
       });
     }
 
@@ -89,11 +95,7 @@
       var cur = window.I18N.get();
       document.querySelectorAll('#langMenu [data-lang]').forEach(function (b) {
         b.classList.toggle('active', b.getAttribute('data-lang') === cur);
-        if (b.classList.contains('active') && window.I18N.t) {
-          b.textContent = b.dataset.langLabel;
-        } else if (!b.classList.contains('active') && window.I18N.t) {
-          b.textContent = window.I18N.t('set.language') || b.dataset.langLabel;
-        }
+        b.textContent = b.dataset.langLabel;
       });
       var title = document.getElementById('setTitleTheme');
       if (title && window.I18N.t) title.textContent = window.I18N.t('set.theme');
@@ -104,6 +106,7 @@
       if (link && window.I18N.t) link.textContent = window.I18N.t('set.linkDashboard');
       var toggle = document.getElementById('settingsToggle');
       if (toggle && window.I18N.t) toggle.title = window.I18N.t('view.settings');
+      syncTheme();
     }
 
     function closePanel() {

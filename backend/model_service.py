@@ -30,6 +30,22 @@ def _safe_number(value, default: float = 0.0) -> float:
     return number
 
 
+def _optional_number(value, default=None):
+    """Coerce a value to a finite float, or `default` when missing/NaN.
+
+    Roster rows can carry NaN (e.g. unrecorded Stress_Index). Flask's JSON
+    provider serializes NaN as a bare `NaN` token, which browsers reject in
+    `response.json()`, so any field that may be NaN must become null instead.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in (float("inf"), float("-inf")):
+        return default
+    return number
+
+
 class ModelService:
     """Singleton service for model predictions."""
 
@@ -87,12 +103,12 @@ class ModelService:
             "department": row["Department"],
             "semester": row["Semester"],
             "gender": row["Gender"],
-            "attendance_rate": float(row["Attendance_Rate"]),
-            "gpa": float(row["GPA"]),
-            "cgpa": float(row["CGPA"]),
-            "stress_index": float(row["Stress_Index"]),
+            "attendance_rate": _safe_number(row["Attendance_Rate"]),
+            "gpa": _safe_number(row["GPA"]),
+            "cgpa": _safe_number(row["CGPA"]),
+            "stress_index": _optional_number(row["Stress_Index"]),
             "actual_dropout": int(row["Actual_Dropout"]),
-            "risk_probability": float(row["Risk_Probability"]),
+            "risk_probability": _safe_number(row["Risk_Probability"]),
             "risk_tier": row["Risk_Tier"],
             "recommendations": self._get_recommendations(row),
         }
@@ -209,14 +225,42 @@ class ModelService:
             {
                 "student_id": int(r["Student_ID"]),
                 "semester": r["Semester"],
-                "attendance": float(r["Attendance_Rate"]),
-                "gpa": float(r["GPA"]),
-                "stress": float(r["Stress_Index"]),
-                "risk_probability": float(r["Risk_Probability"]),
+                "attendance": _safe_number(r["Attendance_Rate"]),
+                "gpa": _safe_number(r["GPA"]),
+                "stress": _optional_number(r["Stress_Index"]),
+                "risk_probability": _safe_number(r["Risk_Probability"]),
                 "risk_tier": r["Risk_Tier"],
             }
             for _, r in at_risk.iterrows()
         ]
+
+    def get_faculty_summary(self, department: str, semester: str = None) -> dict:
+        """Risk-tier counts for a whole department (optionally one year).
+
+        The watchlist table is capped at the top 25 at-risk students, so its
+        length cannot drive the stats row without under-reporting. This mirrors
+        the same filters and counts every tier.
+        """
+        if self.roster is None:
+            return {
+                "total_students": 0, "high": 0, "medium": 0, "low": 0, "at_risk": 0,
+            }
+
+        df = self.roster[self.roster["Department"] == department]
+        if semester and semester != "All":
+            df = df[df["Semester"] == semester]
+
+        tiers = df["Risk_Tier"].value_counts().to_dict()
+        high = int(tiers.get("High", 0))
+        medium = int(tiers.get("Medium", 0))
+        low = int(tiers.get("Low", 0))
+        return {
+            "total_students": int(len(df)),
+            "high": high,
+            "medium": medium,
+            "low": low,
+            "at_risk": high + medium,
+        }
 
 
 # Singleton instance

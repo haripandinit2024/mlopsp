@@ -134,6 +134,28 @@ class TestPrivilegedRoleProvisioning(FirebaseTestCase):
         self.assertEqual(response.get_json()["user"]["role"], "student")
         self.assertEqual(self.client.get("/api/overview").status_code, 403)
 
+    def test_existing_student_can_upgrade_role_with_invite_code(self):
+        """Re-selecting a privileged role with a valid code updates the profile."""
+        self.sign_in(uid="uid-124", email="soon-admin@example.com", role="student")
+        token = self.firebase.issue_id_token("uid-124", "soon-admin@example.com")
+        response = self.client.post("/api/auth/verify", json={
+            "id_token": token, "role": "admin",
+            "invite_code": "valid-invite-code"})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["user"]["role"], "admin")
+        self.assertEqual(self.firebase.users["uid-124"]["role"], "admin")
+        self.assertEqual(self.client.get("/api/overview").status_code, 200)
+
+    def test_existing_account_without_invite_code_keeps_its_role(self):
+        """A privilege request without the code is denied and changes nothing."""
+        self.sign_in(uid="uid-125", email="stay-student@example.com", role="student")
+        token = self.firebase.issue_id_token("uid-125", "stay-student@example.com")
+        response = self.client.post("/api/auth/verify", json={
+            "id_token": token, "role": "admin"})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.firebase.users["uid-125"]["role"], "student")
+        self.assertEqual(self.client.get("/api/overview").status_code, 403)
+
 
 class TestStudentLinking(FirebaseTestCase):
     def test_student_can_link_a_known_roster_id(self):

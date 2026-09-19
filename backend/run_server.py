@@ -16,8 +16,8 @@ if __name__ == "__main__":
     debug = bool(app.config.get("DEBUG"))
 
     print("\n" + "=" * 60)
-    print("  Student Dropout Risk — Web Dashboard")
-    print(f"  Open http://localhost:{port} in your browser")
+    print("  EduGuard — Student Risk Analytics")
+    print(f"  Open http://localhost:{port}/login in your browser")
     print(f"  Bind: {host}:{port}   debug: {debug}")
     print("=" * 60 + "\n")
     app.run(host=host, port=port, debug=debug, use_reloader=debug)

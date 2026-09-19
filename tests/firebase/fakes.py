@@ -75,6 +75,12 @@ class FakeFirebase:
         self.users[uid] = document
         return firestore_service.to_api_user(document)
 
+    def set_user_role(self, uid, role, student_id=None):
+        profile = self.users.setdefault(uid, {"uid": uid, "role": "student"})
+        profile["role"] = role
+        profile["studentId"] = student_id if role == "student" else None
+        return firestore_service.to_api_user(profile)
+
     def update_user_profile(self, uid, **fields):
         profile = self.users.setdefault(uid, {"uid": uid, "role": "student"})
         profile.update({k: v for k, v in fields.items() if k in {"name", "status"}})
@@ -114,6 +120,7 @@ class FakeFirebase:
             mock.patch.object(fb, "verify_session_cookie", self.verify_session_cookie),
             mock.patch.object(firestore_service, "get_user_profile", self.get_user_profile),
             mock.patch.object(firestore_service, "create_user_profile", self.create_user_profile),
+            mock.patch.object(firestore_service, "set_user_role", self.set_user_role),
             mock.patch.object(firestore_service, "update_user_profile", self.update_user_profile),
             mock.patch.object(firestore_service, "record_prediction", self.record_prediction),
             mock.patch.object(firestore_service, "list_predictions", self.list_predictions),

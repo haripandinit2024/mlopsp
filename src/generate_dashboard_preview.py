@@ -26,6 +26,16 @@ def copy_assets():
         source = source_js / name
         if source.is_file():
             shutil.copyfile(source, PUBLIC_JS_DIR / name)
+    # The preview header references /logo.svg, so keep a copy next to it for
+    # Vite/static builds (Flask already serves it from the frontend root).
+    logo = BASE_DIR / "frontend" / "logo.svg"
+    if logo.is_file():
+        shutil.copyfile(logo, PUBLIC_DIR / "logo.svg")
+    # The preview (and all pages) reference /favicon.svg; copy it beside the
+    # generated page too so Vite/static builds serve the same mark.
+    favicon = BASE_DIR / "frontend" / "favicon.svg"
+    if favicon.is_file():
+        shutil.copyfile(favicon, PUBLIC_DIR / "favicon.svg")
 
 
 def main():
@@ -44,8 +54,6 @@ def main():
     }
 
     html = TEMPLATE.replace("/*__DATA__*/", json.dumps(data, separators=(",", ":")))
-    for prefix in ("me", "fm", "am"):
-        html = html.replace(f"<<{prefix.upper()}_PANEL>>", MANUAL_PANEL.replace("{{P}}", prefix))
 
     OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_HTML.write_text(html, encoding="utf-8")
@@ -53,58 +61,16 @@ def main():
     print(f"Wrote {OUTPUT_HTML}")
 
 
-MANUAL_PANEL = r"""
-    <div class="panel" style="padding:22px;margin-top:18px">
-      <h3 style="margin:0 0 6px">Manual entry</h3>
-      <p style="color:var(--muted);margin:0 0 16px">Enter a profile to get a live risk prediction (matched against the 10,000-student roster).</p>
-      <div class="field">
-        <select id="{{P}}-gender">
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-        <select id="{{P}}-dept"></select>
-        <select id="{{P}}-year"></select>
-      </div>
-      <div class="field">
-        <label style="align-self:center;color:var(--muted)">Attendance %</label>
-        <input type="number" id="{{P}}-att" min="0" max="100" step="0.1" placeholder="e.g. 82" style="width:110px" />
-        <label style="align-self:center;color:var(--muted)">GPA</label>
-        <input type="number" id="{{P}}-gpa" min="0" max="4" step="0.01" placeholder="e.g. 2.5" style="width:90px" />
-        <label style="align-self:center;color:var(--muted)">CGPA</label>
-        <input type="number" id="{{P}}-cgpa" min="0" max="4" step="0.01" placeholder="e.g. 2.5" style="width:90px" />
-        <label style="align-self:center;color:var(--muted)">Stress (1-10)</label>
-        <input type="number" id="{{P}}-stress" min="1" max="10" step="0.1" placeholder="e.g. 6" style="width:90px" />
-        <button class="btn primary" id="{{P}}-go">Predict</button>
-      </div>
-      <div class="student-result panel hidden" id="{{P}}-result">
-        <div class="result-head">
-          <h3>Predicted outcome</h3>
-          <span id="{{P}}-badge"></span>
-        </div>
-        <div style="margin-bottom:10px;color:var(--muted);font-size:0.85rem">Predicted dropout probability</div>
-        <div class="bar" style="height:16px"><span id="{{P}}-bar"></span></div>
-        <div style="margin:18px 0 8px;color:var(--muted);font-size:0.85rem">Recommendations</div>
-        <ul id="{{P}}-recs" style="margin:0;padding-left:20px;color:var(--text);line-height:1.7"></ul>
-        <div style="margin:18px 0 8px;color:var(--muted);font-size:0.85rem">Most similar students</div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead><tr><th>Student ID</th><th>Dept</th><th>Year</th><th>Attendance</th><th>GPA</th><th>Risk</th></tr></thead>
-            <tbody id="{{P}}-similar"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-"""
-
-
 TEMPLATE = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Student Dropout Risk — Live Dashboard</title>
+<title>EduGuard — Live Student Risk Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="/js/theme.js"></script>
+<script>/* The public preview always opens in the light theme: force it before the page paints so a saved dark/system preference (or the OS scheme) can't darken the landing and cause a flash. */ if (window.Theme) Theme.set("light");</script>
 <script src="/js/i18n.js"></script>
 <style>
 :root {
@@ -162,8 +128,9 @@ body::before {
   background: linear-gradient(145deg, var(--cyan), var(--cyan-2));
   box-shadow: 0 12px 28px rgba(34,199,215,0.28);
   display: grid; place-items: center; color: #06111d;
-  font-weight: 900; letter-spacing: 0.04em;
+  font-weight: 900; letter-spacing: 0.04em; overflow: hidden;
 }
+.mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .brand h1 { margin: 0; font-size: clamp(1rem, 2vw, 1.25rem); letter-spacing: 0.08em; text-transform: uppercase; }
 .brand p { margin: 2px 0 0; color: var(--muted); font-size: 0.95rem; }
 .pill {
@@ -241,7 +208,7 @@ select:focus, input:focus { border-color: var(--cyan); }
   .shell { width: min(100vw - 20px, 1200px); padding-top: 12px; }
   .grid, .double, .result-meta { grid-template-columns: 1fr; }
 }
-html[data-theme="light"] {
+html[data-theme="light"], html[data-resolved-theme="light"] {
   --bg: #eef4fb;
   --panel: rgba(255, 255, 255, 0.82);
   --panel-strong: rgba(255, 255, 255, 0.92);
@@ -250,23 +217,82 @@ html[data-theme="light"] {
   --line: rgba(15, 28, 46, 0.14);
   --shadow: 0 24px 80px rgba(30, 60, 100, 0.18);
 }
-html[data-theme="light"] html, html[data-theme="light"] body {
+html[data-theme="light"] html, html[data-resolved-theme="light"] html,
+html[data-theme="light"] body, html[data-resolved-theme="light"] body {
   background:
     radial-gradient(circle at top left, rgba(97,223,255,0.35), transparent 28%),
     radial-gradient(circle at 85% 15%, rgba(102,227,160,0.28), transparent 22%),
     radial-gradient(circle at 30% 80%, rgba(255,203,107,0.22), transparent 24%),
     linear-gradient(180deg, #f4f8fe 0%, #e9f1fb 56%, #f2f7fd 100%);
 }
-html[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.65); }
+html[data-theme="light"] .topbar, html[data-resolved-theme="light"] .topbar { background: rgba(255, 255, 255, 0.65); }
 html[data-theme="light"] .tabs button,
+html[data-resolved-theme="light"] .tabs button,
 html[data-theme="light"] .btn,
+html[data-resolved-theme="light"] .btn,
 html[data-theme="light"] .meta,
+html[data-resolved-theme="light"] .meta,
 html[data-theme="light"] select,
+html[data-resolved-theme="light"] select,
 html[data-theme="light"] input[type="text"],
-html[data-theme="light"] input[type="number"] { background: rgba(15, 28, 46, 0.05); }
-html[data-theme="light"] tbody tr:hover { background: rgba(15, 28, 46, 0.05); }
-html[data-theme="light"] .bar { background: rgba(15, 28, 46, 0.1); }
-html[data-theme="light"] .pill { background: rgba(15, 28, 46, 0.05); }
+html[data-resolved-theme="light"] input[type="text"],
+html[data-theme="light"] input[type="number"],
+html[data-resolved-theme="light"] input[type="number"] { background: rgba(15, 28, 46, 0.05); }
+html[data-theme="light"] tbody tr:hover, html[data-resolved-theme="light"] tbody tr:hover { background: rgba(15, 28, 46, 0.05); }
+html[data-theme="light"] .bar, html[data-resolved-theme="light"] .bar { background: rgba(15, 28, 46, 0.1); }
+html[data-theme="light"] .pill, html[data-resolved-theme="light"] .pill { background: rgba(15, 28, 46, 0.05); }
+
+/* Ocean / Sunset / Forest share the same light surface treatment as Light,
+   each with its own accent palette. */
+html[data-theme="ocean"], html[data-resolved-theme="ocean"] { --bg:#e8f4f8; --panel:rgba(255,255,255,0.82); --panel-strong:rgba(255,255,255,0.92); --text:#0c4a6e; --muted:#5a8fa8; --line:rgba(12,74,110,0.18); --cyan:#0891b2; --cyan-2:#0e7490; --amber:#d97706; --green:#16a34a; --red:#dc2626; --shadow:0 24px 80px rgba(8,145,178,0.18); }
+html[data-theme="sunset"], html[data-resolved-theme="sunset"] { --bg:#fef2f2; --panel:rgba(255,255,255,0.82); --panel-strong:rgba(255,255,255,0.92); --text:#7f1d1d; --muted:#c2692f; --line:rgba(127,29,29,0.16); --cyan:#ea580c; --cyan-2:#c2410c; --amber:#f59e0b; --green:#16a34a; --red:#dc2626; --shadow:0 24px 80px rgba(234,88,12,0.18); }
+html[data-theme="forest"], html[data-resolved-theme="forest"] { --bg:#f0fdf4; --panel:rgba(255,255,255,0.82); --panel-strong:rgba(255,255,255,0.92); --text:#14532d; --muted:#5e926e; --line:rgba(20,83,45,0.16); --cyan:#16a34a; --cyan-2:#15803d; --amber:#d97706; --green:#059669; --red:#dc2626; --shadow:0 24px 80px rgba(22,163,74,0.18); }
+html[data-theme="ocean"] html, html[data-resolved-theme="ocean"] html,
+html[data-theme="ocean"] body, html[data-resolved-theme="ocean"] body { background: radial-gradient(circle at top left, rgba(34,211,238,0.30), transparent 28%), radial-gradient(circle at 85% 15%, rgba(22,225,255,0.22), transparent 22%), radial-gradient(circle at 30% 80%, rgba(8,145,178,0.14), transparent 24%), linear-gradient(180deg, #f0fafd 0%, #e3f2fa 56%, #edf8fc 100%); }
+html[data-theme="sunset"] html, html[data-resolved-theme="sunset"] html,
+html[data-theme="sunset"] body, html[data-resolved-theme="sunset"] body { background: radial-gradient(circle at top left, rgba(251,146,60,0.28), transparent 28%), radial-gradient(circle at 85% 15%, rgba(244,63,94,0.18), transparent 22%), radial-gradient(circle at 30% 80%, rgba(245,158,11,0.16), transparent 24%), linear-gradient(180deg, #fff7f2 0%, #fdeee6 56%, #fef6f1 100%); }
+html[data-theme="forest"] html, html[data-resolved-theme="forest"] html,
+html[data-theme="forest"] body, html[data-resolved-theme="forest"] body { background: radial-gradient(circle at top left, rgba(74,222,128,0.26), transparent 28%), radial-gradient(circle at 85% 15%, rgba(22,163,74,0.16), transparent 22%), radial-gradient(circle at 30% 80%, rgba(5,150,105,0.14), transparent 24%), linear-gradient(180deg, #f7fdf8 0%, #ecf8ef 56%, #f5fbf7 100%); }
+html[data-theme="ocean"] .topbar, html[data-resolved-theme="ocean"] .topbar,
+html[data-theme="sunset"] .topbar, html[data-resolved-theme="sunset"] .topbar,
+html[data-theme="forest"] .topbar, html[data-resolved-theme="forest"] .topbar { background: rgba(255, 255, 255, 0.65); }
+html[data-theme="ocean"] .tabs button, html[data-resolved-theme="ocean"] .tabs button,
+html[data-theme="sunset"] .tabs button, html[data-resolved-theme="sunset"] .tabs button,
+html[data-theme="forest"] .tabs button, html[data-resolved-theme="forest"] .tabs button,
+html[data-theme="ocean"] .btn, html[data-resolved-theme="ocean"] .btn,
+html[data-theme="sunset"] .btn, html[data-resolved-theme="sunset"] .btn,
+html[data-theme="forest"] .btn, html[data-resolved-theme="forest"] .btn,
+html[data-theme="ocean"] .meta, html[data-resolved-theme="ocean"] .meta,
+html[data-theme="sunset"] .meta, html[data-resolved-theme="sunset"] .meta,
+html[data-theme="forest"] .meta, html[data-resolved-theme="forest"] .meta,
+html[data-theme="ocean"] select, html[data-resolved-theme="ocean"] select,
+html[data-theme="sunset"] select, html[data-resolved-theme="sunset"] select,
+html[data-theme="forest"] select, html[data-resolved-theme="forest"] select,
+html[data-theme="ocean"] input[type="text"], html[data-resolved-theme="ocean"] input[type="text"],
+html[data-theme="sunset"] input[type="text"], html[data-resolved-theme="sunset"] input[type="text"],
+html[data-theme="forest"] input[type="text"], html[data-resolved-theme="forest"] input[type="text"],
+html[data-theme="ocean"] input[type="number"], html[data-resolved-theme="ocean"] input[type="number"],
+html[data-theme="sunset"] input[type="number"], html[data-resolved-theme="sunset"] input[type="number"],
+html[data-theme="forest"] input[type="number"], html[data-resolved-theme="forest"] input[type="number"] { background: rgba(15, 28, 46, 0.05); }
+html[data-theme="ocean"] tbody tr:hover, html[data-resolved-theme="ocean"] tbody tr:hover,
+html[data-theme="sunset"] tbody tr:hover, html[data-resolved-theme="sunset"] tbody tr:hover,
+html[data-theme="forest"] tbody tr:hover, html[data-resolved-theme="forest"] tbody tr:hover { background: rgba(15, 28, 46, 0.05); }
+html[data-theme="ocean"] .bar, html[data-resolved-theme="ocean"] .bar,
+html[data-theme="sunset"] .bar, html[data-resolved-theme="sunset"] .bar,
+html[data-theme="forest"] .bar, html[data-resolved-theme="forest"] .bar { background: rgba(15, 28, 46, 0.1); }
+html[data-theme="ocean"] .pill, html[data-resolved-theme="ocean"] .pill,
+html[data-theme="sunset"] .pill, html[data-resolved-theme="sunset"] .pill,
+html[data-theme="forest"] .pill, html[data-resolved-theme="forest"] .pill { background: rgba(15, 28, 46, 0.05); }
+
+/* Role dashboards (faculty watchlist / admin analytics) */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.toolbar select { max-width: 220px; }
+.toolbar .pill { font-size: 0.82rem; padding: 9px 13px; margin-left: auto; }
+.r-table { overflow-x: auto; margin-top: 4px; }
+.r-table table { min-width: 720px; }
+.r-table th, .r-table td { white-space: nowrap; }
+td.num, th.num { text-align: right; }
+td strong { font-weight: 700; }
 
 /* Settings control (single stable point for theme + language) */
 #settings-controls { position: fixed; top: 1rem; right: 1rem; z-index: 10000; }
@@ -303,6 +329,45 @@ html[data-theme="light"] .pill { background: rgba(15, 28, 46, 0.05); }
 .set-lang-grid button.active, .set-lang-grid button:hover { border-color: var(--cyan); background: rgba(97,223,255,0.2); }
 .set-link { display: block; text-align: center; margin-top: 0.75rem; font-size: 0.85rem; color: var(--cyan); text-decoration: none; }
 .set-link:hover { text-decoration: underline; }
+.set-promo { display: grid; gap: 0.5rem; }
+.promo-link {
+  display: flex; flex-direction: column; gap: 2px; text-decoration: none;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+  border-radius: 12px; padding: 0.7rem 0.85rem; color: var(--text);
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+.promo-link:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.promo-link strong { font-size: 0.92rem; }
+.promo-link span { color: var(--muted); font-size: 0.8rem; }
+.promo-lock { color: var(--muted); font-size: 0.72rem; margin-left: 0.4rem; }
+.invite-modal {
+  position: fixed; inset: 0; z-index: 11000; display: flex; align-items: center; justify-content: center;
+  padding: 1rem; background: rgba(4,10,20,0.72); backdrop-filter: blur(4px);
+}
+.invite-card {
+  position: relative; width: min(400px, 100%); color: var(--text);
+  background: var(--panel-strong); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); padding: 1.4rem;
+}
+.invite-card h3 { margin: 0 0 0.35rem; }
+.invite-card > p { color: var(--muted); font-size: 0.88rem; margin: 0 0 0.95rem; }
+.invite-close {
+  position: absolute; top: 0.55rem; right: 0.55rem; background: transparent; border: none;
+  color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 0.25rem;
+}
+.invite-close:hover { color: var(--text); }
+.invite-label { display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.35rem; }
+.invite-input {
+  width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+  border-radius: 10px; padding: 0.65rem 0.75rem; color: var(--text); font-size: 0.95rem;
+}
+.invite-input:focus { outline: none; border-color: var(--cyan); }
+.invite-error { color: #ff8a8a; font-size: 0.83rem; margin: 0.55rem 0 0; }
+.invite-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.1rem; }
+.invite-btn { border-radius: 10px; padding: 0.55rem 0.95rem; font-size: 0.88rem; cursor: pointer; border: 1px solid var(--line); }
+.invite-btn.ghost { background: transparent; color: var(--text); }
+.invite-btn.primary { background: var(--cyan); border-color: var(--cyan); color: #041018; font-weight: 600; }
+.invite-btn:disabled { opacity: 0.6; cursor: default; }
 .settings-view-card { width: min(560px, 100%); }
 .settings-desc { margin: 0 0 1.25rem; }
 .hidden { display: none !important; }
@@ -316,10 +381,10 @@ body { top: 0 !important; }
 <main class="shell">
   <header class="topbar panel">
     <div class="brand">
-      <div class="mark">SR</div>
+      <div class="mark"><img src="/logo.svg" alt="EduGuard logo" /></div>
       <div>
-        <h1>Student Risk Intelligence</h1>
-        <p>Live dashboard · real model output on the full 10,000-student roster</p>
+        <h1>EduGuard</h1>
+        <p>Student Risk Intelligence — live dashboard · real model output on the full 10,000-student roster</p>
       </div>
     </div>
     <div class="topbar-actions">
@@ -328,13 +393,7 @@ body { top: 0 !important; }
     </div>
   </header>
 
-<nav class="tabs" id="tabs">
-    <button type="button" class="active" data-view="overview">Overview</button>
-    <button type="button" data-view="student">Student</button>
-    <button type="button" data-view="faculty">Faculty</button>
-    <button type="button" data-view="admin">Admin</button>
-    <button type="button" data-view="settings">&#9881;&#65039; Settings</button>
-</nav>
+<nav class="tabs" id="tabs" aria-label="Views"></nav>
 
   <!-- OVERVIEW -->
   <section class="view active" id="view-overview">
@@ -351,90 +410,22 @@ body { top: 0 !important; }
     </div>
   </section>
 
-  <!-- STUDENT -->
-  <section class="view" id="view-student">
-    <div class="panel" style="padding:22px">
-      <h3 style="margin:0 0 6px">Student lookup</h3>
-      <p style="color:var(--muted);margin:0 0 16px">Enter a student ID (1–10,000) to see their real predicted risk.</p>
-      <div class="lookup">
-        <input type="text" id="sid-input" placeholder="Student ID" inputmode="numeric" />
-        <button class="btn primary" id="sid-go">Look up</button>
-      </div>
-      <div class="student-result panel hidden" id="student-result">
-        <div class="result-head">
-          <h3 id="sr-name"></h3>
-          <span id="sr-badge"></span>
-        </div>
-        <div class="result-meta" id="sr-meta"></div>
-        <div style="margin-bottom:10px;color:var(--muted);font-size:0.85rem">Predicted dropout probability</div>
-        <div class="bar" style="height:16px"><span id="sr-bar"></span></div>
-      </div>
-      <div class="missing hidden" id="sr-missing">No student found with that ID.</div>
-    </div>
-
-    <div class="panel" style="padding:22px;margin-top:18px">
-      <h3 style="margin:0 0 6px">Manual entry</h3>
-      <p style="color:var(--muted);margin:0 0 16px">Enter a profile to get a live risk prediction (matched against the 10,000-student roster).</p>
-      <div class="field">
-        <select id="me-gender">
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-        <select id="me-dept"></select>
-        <select id="me-year"></select>
-      </div>
-      <div class="field">
-        <label style="align-self:center;color:var(--muted)">Attendance %</label>
-        <input type="number" id="me-att" min="0" max="100" step="0.1" placeholder="e.g. 82" style="width:110px" />
-        <label style="align-self:center;color:var(--muted)">GPA</label>
-        <input type="number" id="me-gpa" min="0" max="4" step="0.01" placeholder="e.g. 2.5" style="width:90px" />
-        <label style="align-self:center;color:var(--muted)">CGPA</label>
-        <input type="number" id="me-cgpa" min="0" max="4" step="0.01" placeholder="e.g. 2.5" style="width:90px" />
-        <label style="align-self:center;color:var(--muted)">Stress (1-10)</label>
-        <input type="number" id="me-stress" min="1" max="10" step="0.1" placeholder="e.g. 6" style="width:90px" />
-        <button class="btn primary" id="me-go">Predict</button>
-      </div>
-      <div class="student-result panel hidden" id="me-result">
-        <div class="result-head">
-          <h3>Predicted outcome</h3>
-          <span id="me-badge"></span>
-        </div>
-        <div style="margin-bottom:10px;color:var(--muted);font-size:0.85rem">Predicted dropout probability</div>
-        <div class="bar" style="height:16px"><span id="me-bar"></span></div>
-        <div style="margin:18px 0 8px;color:var(--muted);font-size:0.85rem">Recommendations</div>
-        <ul id="me-recs" style="margin:0;padding-left:20px;color:var(--text);line-height:1.7"></ul>
-        <div style="margin:18px 0 8px;color:var(--muted);font-size:0.85rem">Most similar students</div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead><tr><th>Student ID</th><th>Dept</th><th>Year</th><th>Attendance</th><th>GPA</th><th>Risk</th></tr></thead>
-            <tbody id="me-similar"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- FACULTY -->
   <section class="view" id="view-faculty">
-    <div class="panel" style="padding:22px">
-      <h3 style="margin:0 0 16px">Department watchlist</h3>
-      <div class="field">
-        <select id="fa-dept"></select>
-        <select id="fa-year"></select>
+    <div class="grid" id="faculty-stats"></div>
+    <div class="panel" style="padding:20px">
+      <div class="toolbar">
+        <select id="facultyDept" aria-label="Department"></select>
+        <select id="facultyRisk" aria-label="Risk tier">
+          <option value="">All risk tiers</option>
+          <option>High</option>
+          <option>Medium</option>
+        </select>
+        <input type="text" id="facultySearch" placeholder="Search student ID…" autocomplete="off" />
+        <span class="pill" id="faculty-count"></span>
       </div>
-      <div class="grid" id="fa-summary" style="margin-bottom:18px"></div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr><th>Student ID</th><th>Year</th><th>Attendance %</th><th>GPA</th><th>CGPA</th><th>Stress</th><th>Risk</th><th>Tier</th></tr></thead>
-          <tbody id="fa-rows"></tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <span class="count" id="fa-count"></span>
-        <div><button class="btn" id="fa-prev">Prev</button> <button class="btn" id="fa-next">Next</button></div>
-      </div>
+      <div class="r-table" id="faculty-table"></div>
     </div>
-    <<FM_PANEL>>
   </section>
 
   <!-- ADMIN -->
@@ -445,12 +436,15 @@ body { top: 0 !important; }
         <h3>Average risk by department</h3>
         <div class="wrap"><canvas id="chart-dept"></canvas></div>
       </div>
-      <div class="panel chart-panel">
-        <h3>Average risk by year</h3>
-        <div class="wrap"><canvas id="chart-year"></canvas></div>
+      <div class="panel" style="padding:20px">
+        <h3 style="margin:0 0 14px">Highest risk students</h3>
+        <div class="r-table" id="admin-top"></div>
       </div>
     </div>
-    <<AM_PANEL>>
+    <div class="panel" style="padding:20px">
+      <h3 style="margin:0 0 14px">Department breakdown</h3>
+      <div class="r-table" id="admin-dept"></div>
+    </div>
   </section>
 
   <!-- SETTINGS -->
@@ -459,11 +453,24 @@ body { top: 0 !important; }
       <h3 style="margin:0 0 6px">Settings</h3>
       <p style="color:var(--muted);margin:0 0 1.25rem">Theme and language apply to all pages. Your choice is saved automatically on this device.</p>
       <div style="margin-bottom:1rem">
+        <div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:0.5rem">Explore the platform</div>
+        <div class="set-promo">
+          <a class="promo-link" data-role="student" href="/login?role=student#signup" target="_top"><strong>Student</strong><span>Look up a student and get a live risk prediction</span></a>
+          <a class="promo-link" data-role="faculty" data-invite="1" href="/login#signup" target="_top"><strong>Faculty<span class="promo-lock">&#128274; invite code</span></strong><span>Monitor department watchlists and at-risk students</span></a>
+          <a class="promo-link" data-role="admin" data-invite="1" href="/login#signup" target="_top"><strong>Admin<span class="promo-lock">&#128274; invite code</span></strong><span>See institution-wide risk analytics</span></a>
+        </div>
+        <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0 0.4rem">Enter a faculty or admin invite code to open that dashboard right here in the preview. A real account is only needed for the live app.</p>
+        <a class="set-link" href="/login#signup" target="_top">Create an account for the live app</a>
+      </div>
+      <div style="margin-bottom:1rem">
         <div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:0.5rem">Theme</div>
         <div class="set-theme-menu" id="settingsThemeMenu">
           <button type="button" data-theme-opt="light">&#9728;&#65039; Light</button>
           <button type="button" data-theme-opt="dark">&#127769; Dark</button>
           <button type="button" data-theme-opt="system">&#128421;&#65039; System</button>
+          <button type="button" data-theme-opt="ocean">&#128167; Ocean</button>
+          <button type="button" data-theme-opt="sunset">&#127788;&#65039; Sunset</button>
+          <button type="button" data-theme-opt="forest">&#127807; Forest</button>
         </div>
       </div>
       <div>
@@ -473,31 +480,35 @@ body { top: 0 !important; }
     </div>
   </section>
 
-  <div class="footer">
+  <div class="footer" id="previewFooter">
     Generated from <code>student_risk_scores.csv</code> — the live output of the XGBoost pipeline on the full roster.
   </div>
 </main>
 
+<!-- Invite-code gate for the Faculty/Admin sign-up links -->
+<div class="invite-modal hidden" id="inviteModal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle">
+  <div class="invite-card">
+    <button type="button" class="invite-close" id="inviteClose" aria-label="Close">&#10005;</button>
+    <h3 id="inviteTitle">Invite code</h3>
+    <p id="inviteDesc">Enter your invite code to continue.</p>
+    <label class="invite-label" for="inviteInput">Invite code</label>
+    <input id="inviteInput" class="invite-input" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. EDU-ADMIN-2026" />
+    <p class="invite-error hidden" id="inviteError"></p>
+    <div class="invite-actions">
+      <button type="button" class="invite-btn ghost" id="inviteCancel">Cancel</button>
+      <button type="button" class="invite-btn primary" id="inviteConfirm">Continue</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const DATA = /*__DATA__*/;
 const records = DATA.records;
-const byId = new Map(records.map(r => [String(r.Student_ID), r]));
 const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
 const fmtPct = p => (p * 100).toFixed(1) + "%";
 
-function tierBadge(tier) {
-  return `<span class="badge ${tier.toLowerCase()}">${tier}</span>`;
-}
-function riskBar(p, color) {
-  const w = Math.round(p * 100);
-  return `<div class="bar"><span style="width:${w}%;background:${color}"></span></div>`;
-}
-function tierColor(t) {
-  return t === "High" ? "#ff7d7d" : t === "Medium" ? "#ffcb6b" : "#66e3a0";
-}
-
 // Chart.js comes from a CDN. If it fails to load, `new Chart(...)` would throw
-// and kill every script below it (tabs, lookup, manual entry), so all chart
+// and kill every script below it (tabs, theme, settings), so all chart
 // creation goes through this guard instead.
 function makeChart(canvas, config) {
   if (!window.Chart) return null;
@@ -520,7 +531,6 @@ function resizeCharts(root) {
   const high = records.filter(r => r.Risk_Tier === "High").length;
   const medium = records.filter(r => r.Risk_Tier === "Medium").length;
   const dropout = records.reduce((s, r) => s + r.Actual_Dropout, 0) / total;
-  const avgRisk = records.reduce((s, r) => s + r.Risk_Probability, 0) / total;
   document.getElementById("overview-stats").innerHTML = [
     ["Students scored", fmt(total), "Full roster analysis"],
     ["High risk", fmt(high), "Immediate attention"],
@@ -552,206 +562,32 @@ function resizeCharts(root) {
   });
 })();
 
-// ---------- Student lookup ----------
-(function () {
-  const input = document.getElementById("sid-input");
-  const result = document.getElementById("student-result");
-  const missing = document.getElementById("sr-missing");
-  function lookup() {
-    const r = byId.get(input.value.trim());
-    missing.classList.add("hidden");
-    if (!r) { result.classList.add("hidden"); missing.classList.remove("hidden"); return; }
-    document.getElementById("sr-name").textContent = "Student #" + r.Student_ID;
-    document.getElementById("sr-badge").innerHTML = tierBadge(r.Risk_Tier);
-    document.getElementById("sr-meta").innerHTML = [
-      ["Department", r.Department], ["Year", r.Semester], ["Gender", r.Gender],
-      ["Attendance", fmt(r.Attendance_Rate) + "%"], ["GPA", fmt(r.GPA)],
-      ["CGPA", fmt(r.CGPA)], ["Stress index", fmt(r.Stress_Index)],
-      ["Actual dropout", r.Actual_Dropout ? "Yes" : "No"],
-    ].map(([l, v]) => `<div class="meta"><span>${l}</span><strong>${v}</strong></div>`).join("");
-    const p = r.Risk_Probability;
-    document.getElementById("sr-bar").style.width = (p * 100).toFixed(1) + "%";
-    document.getElementById("sr-bar").style.background = tierColor(r.Risk_Tier);
-    result.classList.remove("hidden");
-    result.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-  document.getElementById("sid-go").addEventListener("click", lookup);
-  input.addEventListener("keydown", e => { if (e.key === "Enter") lookup(); });
-})();
-
-// ---------- Faculty ----------
-(function () {
-  const deptSel = document.getElementById("fa-dept");
-  const yearSel = document.getElementById("fa-year");
-  const tbody = document.getElementById("fa-rows");
-  const PAGE = 25;
-  let page = 0;
-
-  DATA.departments.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d; deptSel.appendChild(o); });
-  DATA.semesters.forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = s; yearSel.appendChild(o); });
-  const all = document.createElement("option"); all.value = "All"; all.textContent = "All years"; yearSel.prepend(all);
-
-  function current() {
-    return records.filter(r => r.Department === deptSel.value && (yearSel.value === "All" || r.Semester === yearSel.value));
-  }
-  function render() {
-    let rows = current().filter(r => r.Risk_Tier !== "Low").sort((a, b) => b.Risk_Probability - a.Risk_Probability);
-    const allRows = rows;
-    const total = rows.length;
-    const pages = Math.max(1, Math.ceil(total / PAGE));
-    page = Math.min(page, pages - 1);
-    rows = rows.slice(page * PAGE, (page + 1) * PAGE);
-
-    const sub = current();
-    document.getElementById("fa-summary").innerHTML = [
-      ["Students in filter", fmt(sub.length)],
-      ["High risk", fmt(sub.filter(r => r.Risk_Tier === "High").length)],
-      ["Medium risk", fmt(sub.filter(r => r.Risk_Tier === "Medium").length)],
-      ["At-risk shown", fmt(Math.min(PAGE, Math.max(0, total - page * PAGE)))],
-    ].map(([l, v]) => `<div class="stat"><div class="label">${l}</div><div class="value" style="font-size:1.4rem">${v}</div></div>`).join("");
-
-    tbody.innerHTML = rows.map(r => `
-      <tr>
-        <td>${r.Student_ID}</td><td>${r.Semester}</td><td>${fmt(r.Attendance_Rate)}%</td>
-        <td>${fmt(r.GPA)}</td><td>${fmt(r.CGPA)}</td><td>${fmt(r.Stress_Index)}</td>
-        <td>${riskBar(r.Risk_Probability, tierColor(r.Risk_Tier))}</td><td>${tierBadge(r.Risk_Tier)}</td>
-      </tr>`).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted)">No at-risk students in this filter.</td></tr>`;
-
-    document.getElementById("fa-count").textContent = `Page ${page + 1} of ${pages} · ${total} at-risk students`;
-    document.getElementById("fa-prev").disabled = page === 0;
-    document.getElementById("fa-next").disabled = page >= pages - 1;
-    return allRows.length;
-  }
-  deptSel.addEventListener("change", () => { page = 0; render(); });
-  yearSel.addEventListener("change", () => { page = 0; render(); });
-  document.getElementById("fa-prev").addEventListener("click", () => { page--; render(); });
-  document.getElementById("fa-next").addEventListener("click", () => { page++; render(); });
-  render();
-})();
-
-// ---------- Admin ----------
-(function () {
-  const total = records.length;
-  const high = records.filter(r => r.Risk_Tier === "High").length;
-  const medium = records.filter(r => r.Risk_Tier === "Medium").length;
-  const dropout = records.reduce((s, r) => s + r.Actual_Dropout, 0) / total;
-  document.getElementById("admin-stats").innerHTML = [
-    ["Total students", fmt(total), "Full roster"],
-    ["Predicted dropout rate", fmtPct(records.reduce((s, r) => s + r.Risk_Probability, 0) / total), "Model estimate"],
-    ["Actual dropout rate", fmtPct(dropout), "Ground truth"],
-    ["Flagged (High + Medium)", fmt(high + medium), "Needs attention"],
-  ].map(([l, v, n]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
-
-  const deptAvg = DATA.departments.map(d => {
-    const sub = records.filter(r => r.Department === d);
-    return sub.reduce((s, r) => s + r.Risk_Probability, 0) / sub.length;
-  });
-  makeChart(document.getElementById("chart-dept"), {
-    type: "bar",
-    data: {
-      labels: DATA.departments,
-      datasets: [{ data: deptAvg.map(v => +(v * 100).toFixed(1)), backgroundColor: DATA.departments.map((_, i) =>
-        ["#61dfff", "#22c7d7", "#ffcb6b", "#66e3a0", "#ff7d7d"][i % 5]), borderRadius: 8 }]
-    },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
-                y: { ticks: { color: "#9bb0c9", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.05)" } } } }
-  });
-
-  const yearAvg = DATA.semesters.map(y => {
-    const sub = records.filter(r => r.Semester === y);
-    return sub.reduce((s, r) => s + r.Risk_Probability, 0) / sub.length;
-  });
-  makeChart(document.getElementById("chart-year"), {
-    type: "bar",
-    data: {
-      labels: DATA.semesters,
-      datasets: [{ data: yearAvg.map(v => +(v * 100).toFixed(1)), backgroundColor: "rgba(255,203,107,0.75)", borderRadius: 8 }]
-    },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
-                y: { ticks: { color: "#9bb0c9", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.05)" } } } }
-  });
-})();
-
-// ---------- Manual entry ----------
-function initManualEntry(P) {
-  const genderSel = document.getElementById(P + "-gender");
-  const deptSel = document.getElementById(P + "-dept");
-  const yearSel = document.getElementById(P + "-year");
-  const attIn = document.getElementById(P + "-att");
-  const gpaIn = document.getElementById(P + "-gpa");
-  const cgpaIn = document.getElementById(P + "-cgpa");
-  const stressIn = document.getElementById(P + "-stress");
-  const result = document.getElementById(P + "-result");
-  const FEATS = ["Attendance_Rate", "GPA", "CGPA", "Stress_Index"];
-  const R = DATA.featureRange;
-
-  DATA.departments.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d; deptSel.appendChild(o); });
-  DATA.semesters.forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = s; yearSel.appendChild(o); });
-
-  function recsFor(q) {
-    const recs = [];
-    if (q.Attendance_Rate < 75) recs.push("Attendance below 75% - flag for an advising check-in.");
-    if (q.GPA < 2.0) recs.push("Low GPA - recommend tutoring / academic support referral.");
-    if (q.Stress_Index >= 7) recs.push("High stress index - suggest counseling / wellness resources.");
-    if (!recs.length) recs.push("No major red flags detected - continue routine monitoring.");
-    return recs;
-  }
-  function norm(f, v) {
-    const [lo, hi] = R[f];
-    return hi === lo ? 0 : (v - lo) / (hi - lo);
-  }
-  function predict() {
-    const q = {
-      Gender: genderSel.value,
-      Department: deptSel.value,
-      Semester: yearSel.value,
-      Attendance_Rate: parseFloat(attIn.value),
-      GPA: parseFloat(gpaIn.value),
-      CGPA: parseFloat(cgpaIn.value),
-      Stress_Index: parseFloat(stressIn.value),
-    };
-    for (const f of FEATS) {
-      if (isNaN(q[f])) { alert("Please enter a value for " + f.replace("_", " ")); return; }
-    }
-    const sims = records.map(r => {
-      let d = 0;
-      for (const f of FEATS) { const x = norm(f, q[f]) - norm(f, r[f]); d += x * x; }
-      return { r, d: Math.sqrt(d) };
-    }).sort((a, b) => a.d - b.d).slice(0, 30);
-
-    const risk = sims.reduce((s, x) => s + x.r.Risk_Probability, 0) / sims.length;
-    const tier = risk >= 0.5 ? "High" : risk >= 0.243 ? "Medium" : "Low";
-
-    document.getElementById(P + "-badge").innerHTML = tierBadge(tier);
-    const bar = document.getElementById(P + "-bar");
-    bar.style.width = (risk * 100).toFixed(1) + "%";
-    bar.style.background = tierColor(tier);
-    document.getElementById(P + "-recs").innerHTML = recsFor(q).map(r => `<li>${r}</li>`).join("");
-    document.getElementById(P + "-similar").innerHTML = sims.slice(0, 5).map(x => `
-      <tr>
-        <td>${x.r.Student_ID}</td><td>${x.r.Department}</td><td>${x.r.Semester}</td>
-        <td>${fmt(x.r.Attendance_Rate)}%</td><td>${fmt(x.r.GPA)}</td>
-        <td>${riskBar(x.r.Risk_Probability, tierColor(x.r.Risk_Tier))}<span style="font-size:0.78rem;color:var(--muted)">${fmtPct(x.r.Risk_Probability)}</span></td>
-      </tr>`).join("");
-    result.classList.remove("hidden");
-    result.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-  document.getElementById(P + "-go").addEventListener("click", predict);
-  [attIn, gpaIn, cgpaIn, stressIn].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") predict(); }));
-}
-initManualEntry("me");
-initManualEntry("fm");
-initManualEntry("am");
-
 // ---------- Tabs ----------
+var LANDING_ROLE = null;
+var VIEW_LABELS = {
+  overview: "Overview",
+  faculty: "Faculty watchlist",
+  admin: "Admin analytics",
+  settings: "&#9881;&#65039; Settings",
+};
+
+function renderTabs(role) {
+  var menu = role === "faculty" ? ["faculty", "overview", "settings"]
+    : role === "admin" ? ["admin", "overview", "settings"]
+    : ["overview", "settings"];
+  document.getElementById("tabs").innerHTML = menu.map(function (v) {
+    return '<button type="button" data-view="' + v + '">' + VIEW_LABELS[v] + "</button>";
+  }).join("");
+}
+
 function activateView(view) {
   const target = document.getElementById("view-" + view);
   if (!target) return;
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   target.classList.add("active");
+  if (view === "faculty") renderFaculty();
+  if (view === "admin") renderAdmin();
   // Draw any charts that were created while this view was hidden.
   resizeCharts(target);
   if (view === "settings" && window.I18N) initPreviewSettings();
@@ -763,11 +599,34 @@ document.getElementById("tabs").addEventListener("click", e => {
   activateView(btn.dataset.view);
 });
 
-// Deep link: /preview#admin opens directly on that view.
+// Boot: a valid invite code lands on /preview?role=faculty|admin, which opens
+// that role's dashboard directly (this page renders it from the embedded
+// roster, so no login is needed). The role hand-off is one-shot: the ?role=
+// parameter is stripped from the URL immediately, so a later refresh always
+// starts from the plain Overview + Settings view again. /preview#settings
+// still deep-links too.
 (function () {
-  const requested = (window.location.hash || "").replace("#", "");
-  const known = requested && document.getElementById("view-" + requested);
-  activateView(known ? requested : "overview");
+  try {
+    var r = String(new URLSearchParams(window.location.search).get("role") || "").toLowerCase();
+    LANDING_ROLE = (r === "faculty" || r === "admin") ? r : null;
+  } catch (e) { LANDING_ROLE = null; }
+  if (LANDING_ROLE) {
+    var pill = document.getElementById("updated-pill");
+    if (pill) pill.textContent = VIEW_LABELS[LANDING_ROLE];
+    var fnote = document.getElementById("previewFooter");
+    if (fnote) {
+      fnote.innerHTML = "Generated from <code>student_risk_scores.csv</code> — " +
+        (LANDING_ROLE === "faculty" ? "faculty watchlist" : "admin analytics") +
+        " rendered live from the embedded roster.";
+    }
+    try {
+      if (window.history && history.replaceState) history.replaceState(null, "", "/preview");
+    } catch (e) { /* ignore */ }
+  }
+  renderTabs(LANDING_ROLE);
+  var requested = (window.location.hash || "").replace("#", "");
+  var view = document.getElementById("view-" + requested) ? requested : (LANDING_ROLE || "overview");
+  activateView(view);
 })();
 
 // Keep charts correct when the window is resized.
@@ -803,7 +662,272 @@ function syncPreviewSettings() {
 document.querySelectorAll("#settingsThemeMenu [data-theme-opt]").forEach(function(b) {
   b.addEventListener("click", function() { if (window.Theme) Theme.set(b.getAttribute("data-theme-opt")); });
 });
-if (window.Theme) Theme.set(Theme.get());
+if (window.Theme) {
+  // The public preview always opens in the light theme, regardless of the
+  // theme preference saved from the real app or the visitor's OS scheme.
+  Theme.set("light");
+}
+
+// ---------- Role dashboards (faculty watchlist / admin analytics) ----------
+function tierBadge(t) {
+  var c = String(t).toLowerCase();
+  return '<span class="badge ' + c + '">' + t + "</span>";
+}
+function attendanceBar(v) {
+  var color = v >= 80 ? "var(--green)" : v >= 65 ? "var(--amber)" : "var(--red)";
+  return '<div class="bar" title="Attendance ' + fmt(v) + '%"><span style="width:' + Math.min(100, v) + "%;background:" + color + '"></span></div>';
+}
+function probBar(p) {
+  return '<div class="bar"><span style="width:' + Math.round(p * 100) + '%;background:var(--cyan)"></span></div>';
+}
+function statCards(pairs) {
+  return pairs.map(function (p) {
+    return '<div class="stat"><div class="label">' + p[0] + '</div><div class="value">' + p[1] + '</div><div class="note">' + p[2] + "</div></div>";
+  }).join("");
+}
+
+function renderFaculty() {
+  var stats = document.getElementById("faculty-stats");
+  if (stats && !stats.dataset.rendered) {
+    stats.dataset.rendered = "1";
+    var high = records.filter(r => r.Risk_Tier === "High").length;
+    var medium = records.filter(r => r.Risk_Tier === "Medium").length;
+    var avg = records.reduce((s, r) => s + r.Risk_Probability, 0) / records.length;
+    stats.innerHTML = statCards([
+      ["High risk", fmt(high), "Immediate attention"],
+      ["Medium risk", fmt(medium), "Monitor closely"],
+      ["Watchlist share", fmtPct(high / records.length), "High-risk share of roster"],
+      ["Mean risk probability", fmtPct(avg), "Across all departments"],
+    ]);
+  }
+  var deptSel = document.getElementById("facultyDept");
+  if (deptSel && deptSel.childElementCount === 0) {
+    deptSel.innerHTML = '<option value="">All departments</option>' +
+      DATA.departments.map(function (d) { return "<option>" + d + "</option>"; }).join("");
+  }
+  renderFacultyTable();
+}
+
+function facultyFilters() {
+  return {
+    dept: document.getElementById("facultyDept").value,
+    tier: document.getElementById("facultyRisk").value,
+    q: String(document.getElementById("facultySearch").value || "").trim().toLowerCase(),
+  };
+}
+
+function renderFacultyTable() {
+  var f = facultyFilters();
+  var list = records.filter(function (r) {
+    if (f.dept && r.Department !== f.dept) return false;
+    if (f.tier && r.Risk_Tier !== f.tier) return false;
+    if (f.q && String(r.Student_ID).toLowerCase().indexOf(f.q) === -1) return false;
+    return true;
+  }).sort((a, b) => b.Risk_Probability - a.Risk_Probability);
+  var count = document.getElementById("faculty-count");
+  if (count) count.textContent = list.length + " at-risk students";
+  var table = document.getElementById("faculty-table");
+  if (!table) return;
+  if (!list.length) { table.innerHTML = '<div class="missing">No students match these filters.</div>'; return; }
+  var rows = list.slice(0, 250).map(function (r) {
+    return "<tr><td><strong>" + r.Student_ID + "</strong></td><td>" + r.Department + "</td><td>" + r.Semester + "</td>" +
+      "<td>" + attendanceBar(r.Attendance_Rate) + "</td><td class=\"num\">" + Number(r.GPA).toFixed(2) + "</td>" +
+      '<td class="num">' + Number(r.CGPA).toFixed(2) + '</td><td class="num">' + fmtPct(r.Risk_Probability) + "</td>" +
+      "<td>" + tierBadge(r.Risk_Tier) + "</td></tr>";
+  });
+  table.innerHTML = "<table><thead><tr>" +
+    "<th>Student ID</th><th>Department</th><th>Semester</th><th>Attendance</th>" +
+    '<th class="num">GPA</th><th class="num">CGPA</th><th class="num">Risk</th><th>Tier</th>' +
+    "</tr></thead><tbody>" + rows.join("") + "</tbody></table>";
+}
+
+document.getElementById("facultyDept").addEventListener("change", renderFacultyTable);
+document.getElementById("facultyRisk").addEventListener("change", renderFacultyTable);
+document.getElementById("facultySearch").addEventListener("input", renderFacultyTable);
+
+function renderAdmin() {
+  var total = records.length;
+  var high = records.filter(r => r.Risk_Tier === "High").length;
+  var medium = records.filter(r => r.Risk_Tier === "Medium").length;
+  var dropout = records.reduce((s, r) => s + r.Actual_Dropout, 0) / total;
+
+  var stats = document.getElementById("admin-stats");
+  if (stats && !stats.dataset.rendered) {
+    stats.innerHTML = statCards([
+      ["Students scored", fmt(total), "Full roster"],
+      ["High risk", fmt(high), "Immediate attention"],
+      ["Medium risk", fmt(medium), "Monitor closely"],
+      ["Actual dropout rate", fmtPct(dropout), "Historical ground truth"],
+    ]);
+  }
+
+  var depts = DATA.departments.map(function (d) {
+    var list = records.filter(r => r.Department === d);
+    var h = list.filter(r => r.Risk_Tier === "High").length;
+    var m = list.filter(r => r.Risk_Tier === "Medium").length;
+    var drop = list.reduce((s, r) => s + r.Actual_Dropout, 0) / list.length;
+    var avg = list.reduce((s, r) => s + r.Risk_Probability, 0) / list.length;
+    return { d: d, n: list.length, h: h, m: m, drop: drop, avg: avg };
+  }).sort((a, b) => b.avg - a.avg);
+
+  var deptTable = document.getElementById("admin-dept");
+  if (deptTable) {
+    deptTable.innerHTML = "<table><thead><tr>" +
+      "<th>Department</th><th class=\"num\">Students</th><th class=\"num\">High</th><th class=\"num\">Medium</th>" +
+      '<th class="num">Low</th><th class="num">Dropout rate</th><th>Mean risk</th></tr></thead><tbody>' +
+      depts.map(function (x) {
+        return "<tr><td><strong>" + x.d + "</strong></td><td class=\"num\">" + x.n + "</td><td class=\"num\">" + x.h + "</td>" +
+          '<td class="num">' + x.m + '</td><td class="num">' + (x.n - x.h - x.m) + "</td>" +
+          '<td class="num">' + fmtPct(x.drop) + "</td><td>" + probBar(x.avg) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+
+  var topTable = document.getElementById("admin-top");
+  if (topTable) {
+    var top = records.slice().sort((a, b) => b.Risk_Probability - a.Risk_Probability).slice(0, 20);
+    topTable.innerHTML = "<table><thead><tr>" +
+      "<th>Student ID</th><th>Department</th><th>Semester</th><th>Attendance</th>" +
+      '<th class="num">Risk</th><th>Tier</th></tr></thead><tbody>' +
+      top.map(function (r) {
+        return "<tr><td><strong>" + r.Student_ID + "</strong></td><td>" + r.Department + "</td><td>" + r.Semester + "</td>" +
+          "<td>" + attendanceBar(r.Attendance_Rate) + "</td><td class=\"num\">" + fmtPct(r.Risk_Probability) + "</td>" +
+          "<td>" + tierBadge(r.Risk_Tier) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+
+  var canvas = document.getElementById("chart-dept");
+  if (canvas && window.Chart && !window.__deptChart) {
+    window.__deptChart = makeChart(canvas, {
+      type: "bar",
+      data: {
+        labels: depts.map(x => x.d),
+        datasets: [{ data: depts.map(x => +x.avg.toFixed(3)), backgroundColor: "rgba(102,227,160,0.7)", borderRadius: 6 }],
+      },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } },
+                  y: { ticks: { color: "#9bb0c9" }, grid: { color: "rgba(255,255,255,0.05)" } } } },
+    });
+  }
+}
+
+// ---------- Invite-code gate ----------
+// Faculty and Admin are gated by an invite code. A valid code opens that
+// role's dashboard directly inside this preview (/preview?role=faculty|admin);
+// the code is re-validated server-side before the hand-off. The sessionStorage
+// hand-off below is kept for the plain Student link, which still points at the
+// real sign-up page.
+(function () {
+  var HANDOFF_KEY = "eduguard_signup_handoff";
+  var modal = document.getElementById("inviteModal");
+  var modalTitle = document.getElementById("inviteTitle");
+  var modalDesc = document.getElementById("inviteDesc");
+  var input = document.getElementById("inviteInput");
+  var error = document.getElementById("inviteError");
+  var confirmBtn = document.getElementById("inviteConfirm");
+  var cancelBtn = document.getElementById("inviteCancel");
+  var closeBtn = document.getElementById("inviteClose");
+  var activeRole = null;
+
+  function storeHandoff(role, inviteCode) {
+    try {
+      sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({ role: role, inviteCode: inviteCode || null }));
+    } catch (e) { /* storage may be unavailable (private mode) */ }
+  }
+
+  function goToDashboard(role) {
+    // A validated invite code opens that role's dashboard directly inside this
+    // preview (/preview?role=faculty|admin) — no login page involved. The
+    // invite code itself is never put in the URL.
+    var dest = "/preview?role=" + encodeURIComponent(role);
+    try { window.top.location.href = dest; }
+    catch (e) { window.location.href = dest; }
+  }
+
+  function openModal(role) {
+    if (!modal) { goToDashboard(role); return; }
+    activeRole = role;
+    modalTitle.textContent = role === "admin" ? "Admin access" : "Faculty access";
+    modalDesc.textContent = role === "admin"
+      ? "Enter your admin invite code to continue to the admin dashboard."
+      : "Enter your faculty invite code to continue to the faculty dashboard.";
+    input.value = "";
+    error.textContent = "";
+    error.classList.add("hidden");
+    modal.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    setTimeout(function () { input.focus(); }, 0);
+  }
+
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+    activeRole = null;
+  }
+
+  async function submitInvite() {
+    var code = (input.value || "").trim();
+    if (!code) {
+      error.textContent = "An invite code is required for this role.";
+      error.classList.remove("hidden");
+      input.focus();
+      return;
+    }
+    confirmBtn.disabled = true;
+    var original = confirmBtn.textContent;
+    confirmBtn.textContent = "Checking\u2026";
+    var proceed = true;
+    try {
+      var res = await fetch("/api/auth/invite-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: activeRole, invite_code: code }),
+      });
+      if (res.status === 403) {
+        var data = await res.json().catch(function () { return {}; });
+        error.textContent = data.error || "That invite code is not valid.";
+        error.classList.remove("hidden");
+        proceed = false;
+      } else if (res.status === 400) {
+        error.textContent = "This invite code cannot be used for that role.";
+        error.classList.remove("hidden");
+        proceed = false;
+      }
+      // 404/405 -> the preview is being served without the API (e.g. a static
+      // build); fall through and open the demo dashboard anyway.
+    } catch (e) {
+      // Offline / static host: open the demo dashboard instead of blocking.
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = original;
+    }
+    if (proceed) {
+      var role = activeRole;
+      closeModal();
+      goToDashboard(role);
+    }
+  }
+
+  document.querySelectorAll(".promo-link[data-role]").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      var role = link.getAttribute("data-role");
+      if (link.getAttribute("data-invite") === "1") {
+        event.preventDefault();
+        openModal(role);
+      } else {
+        storeHandoff(role, null);
+      }
+    });
+  });
+
+  if (confirmBtn) confirmBtn.addEventListener("click", submitInvite);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+  if (input) input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); submitInvite(); }
+  });
+  if (modal) modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+})();
 </script>
 <script src="/js/controls.js"></script>
 </body>

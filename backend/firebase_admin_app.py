@@ -178,11 +178,17 @@ def verify_id_token(id_token: str) -> dict:
 
     ``check_revoked=True`` also rejects tokens whose user has been disabled or
     signed out, which is what makes account suspension effective immediately.
+
+    ``clock_skew_seconds=60`` absorbs up to a minute of drift between the
+    issuing Google server and this host; without it, a Google sign-in minted
+    earlier by a few seconds fails with "Token used too early".
     """
     if not id_token:
         raise FirebaseNotConfigured("No ID token supplied")
     auth = get_auth()
-    return auth.verify_id_token(id_token, check_revoked=True)
+    return auth.verify_id_token(
+        id_token, check_revoked=True, clock_skew_seconds=60
+    )
 
 
 def create_session_cookie(id_token: str, expires_in: Optional[int] = None) -> str:
@@ -198,7 +204,9 @@ def verify_session_cookie(session_cookie: str) -> dict:
     if not session_cookie:
         raise FirebaseNotConfigured("No session cookie supplied")
     auth = get_auth()
-    return auth.verify_session_cookie(session_cookie, check_revoked=True)
+    return auth.verify_session_cookie(
+        session_cookie, check_revoked=True, clock_skew_seconds=60
+    )
 
 
 def revoke_refresh_tokens(uid: str) -> None:

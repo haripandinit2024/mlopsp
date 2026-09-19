@@ -7,7 +7,12 @@ async function fetchInterventions() {
   const term = document.getElementById('intSearch')?.value.trim();
   if (status) params.set('status', status);
   if (term) params.set('term', term);
-  const res = await fetch('/api/interventions?' + params.toString());
+  const res = await safeFetch('/api/interventions?' + params.toString());
+  if (res.status === 401) {
+    alert('Session expired. Please log in again.');
+    window.location.href = '/login';
+    return [];
+  }
   if (res.status === 403) {
     document.getElementById('interventionsBody').innerHTML =
       '<tr class="loading"><td colspan="8">Not allowed to view interventions.</td></tr>';
@@ -84,13 +89,18 @@ async function createIntervention(event) {
     description: document.getElementById('intDescription').value.trim(),
   };
 
-  const res = await fetch('/api/interventions', {
+  const res = await safeFetch('/api/interventions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   const data = await res.json();
   if (!res.ok) {
+    if (res.status === 401) {
+      alert('Session expired. Please log in again.');
+      window.location.href = '/login';
+      return false;
+    }
     alert('Error: ' + (data.error || 'Could not create intervention.'));
     return false;
   }
@@ -101,13 +111,18 @@ async function createIntervention(event) {
 }
 
 async function updateInterventionStatus(select) {
-  const res = await fetch('/api/interventions/' + select.dataset.id, {
+  const res = await safeFetch('/api/interventions/' + select.dataset.id, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: select.value }),
   });
   const data = await res.json();
   if (!res.ok) {
+    if (res.status === 401) {
+      alert('Session expired. Please log in again.');
+      window.location.href = '/login';
+      return;
+    }
     alert('Error: ' + (data.error || 'Could not update status.'));
   }
   loadInterventions();
@@ -115,7 +130,12 @@ async function updateInterventionStatus(select) {
 
 async function deleteIntervention(id) {
   if (!confirm('Delete intervention #' + id + '?')) return;
-  const res = await fetch('/api/interventions/' + id, { method: 'DELETE' });
+  const res = await safeFetch('/api/interventions/' + id, { method: 'DELETE' });
+  if (res.status === 401) {
+    alert('Session expired. Please log in again.');
+    window.location.href = '/login';
+    return;
+  }
   if (res.status === 403) {
     alert('Only admins can delete interventions.');
     return;

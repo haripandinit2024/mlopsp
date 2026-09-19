@@ -16,11 +16,19 @@ from functools import wraps
 from pathlib import Path
 
 # Load .env BEFORE any environment variable is read below.
+import sys
+from pathlib import Path
+
+# Add project root to sys.path so 'backend' is importable
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from backend.env_loader import load_env
 
 load_env()
 
-from flask import Flask, jsonify, redirect, request, send_from_directory, session  # noqa: E402
+from flask import Flask, jsonify, make_response, redirect, request, send_from_directory, session  # noqa: E402
 from flask_cors import CORS  # noqa: E402
 
 # Add project root to path
@@ -242,18 +250,45 @@ register_routes(app)
 # --------------------------------------------------------
 # Serve frontend
 # --------------------------------------------------------
+def _serve_preview():
+    """Regenerate and serve the public dashboard preview page."""
+    error = _ensure_preview_current()
+    if error:
+        return error + "\n", 503
+    return send_from_directory(str(PREVIEW_DIR), PREVIEW_FILENAME)
+
+
 @app.route("/")
 def index():
-    if current_identity() is None:
-        return redirect("/login")
-    return redirect("/dashboard")
+    # The site root is the public, standalone dashboard preview. The login page
+    # remains at /login and the authenticated dashboard at /dashboard.
+    return _serve_preview()
 
 
 @app.route("/login")
 def login():
-    if current_identity() is not None:
-        return redirect("/dashboard")
-    return send_from_directory(str(FRONTEND_DIR), "login.html")
+    identity = current_identity()
+    requested_role = (request.args.get("role") or "").strip().lower()
+    if identity is None:
+        return send_from_directory(str(FRONTEND_DIR), "login.html")
+
+    # A role switch was requested, e.g. from the public preview's invite gate.
+    # Drop the current session so the login page can apply the handoff instead
+    # of bouncing straight back to the dashboard of the previously stored role.
+    if requested_role in ("student", "faculty", "admin"):
+        session.clear()
+        response = make_response(
+            send_from_directory(str(FRONTEND_DIR), "login.html")
+        )
+        response.delete_cookie(authorization.SESSION_COOKIE_NAME, path="/")
+        firestore_service.log_event(
+            "auth.logout",
+            actor_uid=identity.get("uid"),
+            actor_role=identity.get("role"),
+        )
+        return response
+
+    return redirect("/dashboard")
 
 
 @app.route("/dashboard")
@@ -351,10 +386,7 @@ def preview():
     exposed. Regenerated on demand when the file is absent or older than the
     scored roster it is built from.
     """
-    error = _ensure_preview_current()
-    if error:
-        return error + "\n", 503
-    return send_from_directory(str(PREVIEW_DIR), PREVIEW_FILENAME)
+    return _serve_preview()
 
 
 @app.route("/css/<path:filename>")
@@ -370,6 +402,27 @@ def serve_js(filename):
 @app.route("/favicon.svg")
 def serve_favicon():
     return send_from_directory(str(FRONTEND_DIR), "favicon.svg", mimetype="image/svg+xml")
+
+
+@app.route("/logo.svg")
+def serve_logo():
+    return send_from_directory(str(FRONTEND_DIR), "logo.svg", mimetype="image/svg+xml")
+
+
+@app.route("/manifest.json")
+def serve_manifest():
+    return send_from_directory(
+        str(FRONTEND_DIR), "manifest.json", mimetype="application/manifest+json"
+    )
+
+
+# --------------------------------------------------------
+# Test Routes
+# --------------------------------------------------------
+@app.route("/test-google-auth.html")
+def test_google_auth():
+    """Test page for debugging Google authentication."""
+    return send_from_directory(str(FRONTEND_DIR), "test-google-auth.html")
 
 
 # --------------------------------------------------------
@@ -454,6 +507,60 @@ def login_api():
     session["user_role"] = user["role"]
     session["student_id"] = user["student_id"]
     return jsonify({"message": "Logged in", "user": user})
+
+
+@app.route("/api/auth/link-student", methods=["POST"])
+@login_required
+def auth_link_student():
+    """
+    Let a student link their account to a roster student_id after signup.
+
+    The roster id belongs to the student: this is a link, not a role change.
+    The value is validated against the loaded roster before it is stored.
+    """
+    identity = current_identity()
+    if (identity or {}).get("role") != "student":
+        return jsonify({
+            "error": "Only student accounts can link a student record."
+        }), 403
+
+    if not using_firebase():
+        return jsonify({"error": "Firebase authentication is not enabled"}), 409
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+
+    nested = data.get("student_id")
+    if nested in (None, ""):
+        return jsonify({"error": "student_id is required"}), 400
+    try:
+        student_id = int(nested)
+    except (TypeError, ValueError):
+        return jsonify({"error": "student_id must be an integer"}), 400
+
+    roster = model_service.roster
+    known_ids = None if roster is None else set(roster["Student_ID"].tolist())
+    if known_ids is not None and student_id not in known_ids:
+        return jsonify({"error": f"Unknown student_id: {student_id}"}), 400
+
+    uid = (identity or {}).get("uid")
+    if not uid:
+        return jsonify({"error": "No user identity"}), 401
+
+    try:
+        profile = firestore_service.set_user_role(uid, "student", student_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        return jsonify({"error": "Could not link the student record"}), 503
+
+    authorization.invalidate_profile(uid)
+    firestore_service.log_event(
+        "auth.student_link", actor_uid=uid, target=str(student_id),
+        outcome="linked"
+    )
+    return jsonify({"message": "Student record linked", "user": profile})
 
 
 @app.route("/api/auth/logout", methods=["POST"])
@@ -560,7 +667,11 @@ def auth_verify():
         claims = fb.verify_id_token(id_token)
     except fb.FirebaseNotConfigured:
         return jsonify({"error": "Authentication service unavailable"}), 503
-    except Exception:
+    except Exception as exc:  # pragma: no cover - diagnostic logging
+        print(
+            f"[auth] ID token rejected: {type(exc).__name__}: {exc}",
+            flush=True,
+        )
         return jsonify({"error": "Invalid or expired authentication token"}), 401
 
     uid = claims.get("uid") or claims.get("sub")
@@ -582,6 +693,47 @@ def auth_verify():
             return profile
         firestore_service.log_event(
             "auth.provision", actor_uid=uid, actor_role=profile.get("role")
+        )
+
+    # The role picker also applies to existing accounts: re-selecting a role at
+    # sign-in updates the stored profile. Privileged roles are gated by the same
+    # server-side invite code used for first-time registration, and the role is
+    # never taken from the token's claims.
+    requested_role = (data.get("role") or "").strip().lower()
+    if requested_role and requested_role != profile.get("role"):
+        if requested_role not in firestore_service.VALID_ROLES:
+            return jsonify({
+                "error": "role must be one of: "
+                         + ", ".join(firestore_service.VALID_ROLES)
+            }), 400
+
+        privileged_error = _check_privileged_signup(
+            requested_role, data.get("invite_code")
+        )
+        if privileged_error:
+            return jsonify({"error": privileged_error}), 403
+
+        student_id = None
+        if requested_role == "student" and data.get("student_id") not in (None, ""):
+            try:
+                student_id = int(data["student_id"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "student_id must be an integer"}), 400
+            roster = model_service.roster
+            known_ids = None if roster is None else set(roster["Student_ID"].tolist())
+            if known_ids is not None and student_id not in known_ids:
+                return jsonify({"error": f"Unknown student_id: {student_id}"}), 400
+
+        try:
+            profile = firestore_service.set_user_role(uid, requested_role, student_id)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception:
+            return jsonify({"error": "Could not update the user role"}), 503
+        authorization.invalidate_profile(uid)
+        firestore_service.log_event(
+            "auth.role_change", actor_uid=uid,
+            actor_role=requested_role, outcome="assigned"
         )
 
     if profile.get("status") != "active":
@@ -614,6 +766,32 @@ def auth_password_reset():
     }), 409
 
 
+@app.route("/api/auth/invite-check", methods=["POST"])
+def auth_invite_check():
+    """
+    Validate a privileged-role invite code before sending the browser to the
+    registration form.
+
+    This is a UX gate only: the code is re-checked during signup, so a valid
+    response here never grants an account or a session by itself.
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+
+    role = str(data.get("role") or "").strip().lower()
+    if role not in PRIVILEGED_ROLES:
+        return jsonify({
+            "error": "Invite codes are only required for faculty and admin roles"
+        }), 400
+
+    error = _check_privileged_signup(role, data.get("invite_code"))
+    if error:
+        return jsonify({"valid": False, "error": error}), 403
+
+    return jsonify({"valid": True, "role": role})
+
+
 # --------------------------------------------------------
 # API Routes
 # --------------------------------------------------------
@@ -633,15 +811,11 @@ def health():
 def get_student(student_id):
     """Look up a student's risk score by ID.
 
-    Students may only read the record their account is linked to; faculty and
-    admin keep roster-wide access. Without this check the sequential Student_ID
-    space (1..10000) is trivially enumerable by any logged-in user.
+    Students may read any roster record; faculty and admin keep roster-wide
+    access too. Only the ground-truth dropout label stays staff-only.
     """
     identity = current_identity()
     role = identity.get("role")
-    # Raises AuthError (mapped to 403) when a student reaches outside their own
-    # record. Staff keep roster-wide access.
-    authorize_student_access(student_id)
 
     result = model_service.predict_student(student_id)
     if "error" in result:
@@ -687,6 +861,17 @@ def faculty_list(department):
     semester = request.args.get("semester", "All")
     result = model_service.get_faculty_list(department, semester)
     return jsonify(result)
+
+
+@app.route("/api/faculty/<department>/summary")
+@roles_required("faculty", "admin")
+def faculty_summary(department):
+    """Risk-tier counts for a department's stat cards.
+
+    Kept separate from the (capped) watchlist so the totals stay accurate.
+    """
+    semester = request.args.get("semester", "All")
+    return jsonify(model_service.get_faculty_summary(department, semester))
 
 
 @app.route("/api/departments")
@@ -831,8 +1016,7 @@ def students_me():
 @app.route("/api/students/<int:student_id>")
 @login_required
 def students_detail(student_id):
-    """Roster record for a student. Students are scoped to their own id."""
-    authorize_student_access(student_id)
+    """Roster record for a student (any logged-in user; label is staff-only)."""
     result = model_service.predict_student(student_id)
     if "error" in result:
         return jsonify(result), 404
