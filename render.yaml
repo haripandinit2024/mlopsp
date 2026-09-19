@@ -1,0 +1,44 @@
+# Render Blueprint - EduGuard Student Risk Analytics
+#
+# Deploy: push this repo, then in Render -> New -> Blueprint -> select the repo.
+# The build runs the preprocessing + training + scoring pipeline so the app
+# boots with a real model, a scored roster, and a generated Firebase config.
+#
+# Required env vars (set them in the Render dashboard after first deploy):
+#   SECRET_KEY                        - any long random string
+#   ADMIN_INVITE_CODE                 - invite code for faculty/admin signups
+#   FIREBASE_API_KEY                  - public Firebase web key
+#   FIREBASE_AUTH_DOMAIN              - e.g. your-project.firebaseapp.com
+#   FIREBASE_PROJECT_ID
+#   FIREBASE_APP_ID
+#   FIREBASE_MESSAGING_SENDER_ID
+#   FIREBASE_SERVICE_ACCOUNT_JSON     - one-line service-account JSON (server secret)
+services:
+  - type: web
+    name: mlopsp
+    runtime: python
+    plan: free
+    buildCommand: |
+      python -m pip install --no-cache-dir -r requirements.txt &&
+      python scripts/generate_firebase_config.py &&
+      python run_preprocessing.py &&
+      python run_training.py &&
+      python src/train_xgboost.py --dataset v3 &&
+      python src/score_all_students.py &&
+      python src/generate_dashboard_preview.py
+    startCommand: gunicorn --chdir . --workers 2 --threads 4 --bind 0.0.0.0:${PORT:-5000} --timeout 300 "backend.app:app"
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      - key: FLASK_HOST
+        value: 0.0.0.0
+      - key: FLASK_PORT
+        value: "5000"
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: AUTH_BACKEND
+        value: auto
+      - key: MODEL_DIR
+        value: models
+      - key: DATASET_DIR
+        value: dataset

@@ -13,6 +13,7 @@ joblib>=1.2.0
 # Web Backend
 flask>=2.3.0
 flask-cors>=4.0.0
+gunicorn>=22.0.0
 
 # Authentication + database (Firebase Authentication + Cloud Firestore).
 # NOTE: intentionally no firebase-storage dependency - Firebase Storage is not used.
